@@ -36,6 +36,8 @@ function startEngine(): void {
     const session = loadSession();
     const env: NodeJS.ProcessEnv = { ...process.env };
     env.OCR_SAVE_SCREENSHOTS = "false";
+    env.VOICE_REALTIME_ENABLED = "false";
+    env.PERF_LOG = "1";
     if (session) {
         env.AICOACH_OPENAI_BASE_URL = `${BACKEND_BASE}/openai/v1`;
         env.AICOACH_PROXY_TOKEN = session.token;

@@ -40,7 +40,6 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
     const voiceOn = engine.config?.voice_input_enabled ?? true;
     const ocrOn = engine.config?.ocr_enabled ?? true;
     const webOn = engine.config?.web_search_enabled ?? true;
-    const screenOn = engine.config?.screen_coaching_enabled ?? true;
 
     // Refresh usage as cycles accrue cost on the backend.
     const cycleCount = engine.cost?.call_count ?? 0;
@@ -175,24 +174,21 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                             />
                             <Toggle
                                 size="sm"
-                                label="Automatic screen coaching"
-                                isSelected={screenOn}
-                                onChange={(v) => engine.updateConfig({ screen_coaching_enabled: v })}
-                            />
-                            <p className="-mt-2 text-xs text-tertiary">
-                                Periodic screen reads while idle. Turn off to eliminate capture/vision lag during
-                                play; voice chat still works.
-                            </p>
-                            <Toggle
-                                size="sm"
                                 label="Screen OCR (local)"
                                 isSelected={ocrOn}
                                 onChange={(v) => engine.updateConfig({ ocr_enabled: v })}
                             />
                             <p className="-mt-2 text-xs text-tertiary">
-                                Local text recognition for voice questions. When off, the coach reuses recent screen
-                                context instead of running OCR every interval.
+                                Local text recognition for voice questions and drift checks between interval captures.
                             </p>
+                            {engine.lastPerf && (
+                                <p className="font-mono text-xs text-tertiary">
+                                    Perf: {engine.lastPerf.phase} {engine.lastPerf.duration_ms}ms
+                                    {engine.lastPerf.grab_ms != null
+                                        ? ` (grab ${engine.lastPerf.grab_ms}ms encode ${engine.lastPerf.encode_ms}ms)`
+                                        : ""}
+                                </p>
+                            )}
                             <Toggle
                                 size="sm"
                                 label="Web research"
@@ -250,14 +246,9 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                                 item.kind === "user" ? (
                                     <div
                                         key={item.id}
-                                        className={`max-w-[85%] self-end rounded-lg rounded-br-sm px-3 py-2 text-sm text-white ${
-                                            item.partial ? "bg-brand-solid/80" : "bg-brand-solid"
-                                        }`}
+                                        className="max-w-[85%] self-end rounded-lg rounded-br-sm bg-brand-solid px-3 py-2 text-sm text-white"
                                     >
                                         {item.text}
-                                        {item.partial && (
-                                            <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-white/90 align-middle" />
-                                        )}
                                     </div>
                                 ) : (
                                     <article

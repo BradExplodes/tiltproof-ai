@@ -50,8 +50,6 @@ class Settings:
     voice_barge_speech_ms: int
     voice_max_utterance_seconds: float
     voice_stt_model: str
-    voice_realtime_enabled: bool
-    voice_realtime_model: str
     ocr_enabled: bool
     ocr_language: str
     ocr_engine: str
@@ -65,7 +63,6 @@ class Settings:
     ocr_save_screenshots: bool
     ocr_debug_save: bool
     ocr_capture_full_quality: bool
-    screen_coaching_enabled: bool
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -183,8 +180,6 @@ class Settings:
         ocr_save_screenshots = _env_bool("OCR_SAVE_SCREENSHOTS", False)
         ocr_debug_save = _env_bool("OCR_DEBUG_SAVE", False)
         ocr_capture_full_quality = _env_bool("OCR_CAPTURE_FULL_QUALITY", True)
-        screen_coaching_enabled = _env_bool("SCREEN_COACHING_ENABLED", True)
-
         return cls(
             openai_api_key=api_key,
             openai_model=response_model,
@@ -214,10 +209,6 @@ class Settings:
             voice_barge_speech_ms=voice_barge_speech_ms,
             voice_max_utterance_seconds=voice_max_utterance,
             voice_stt_model=os.getenv("VOICE_STT_MODEL", "whisper-1"),
-            voice_realtime_enabled=_env_bool("VOICE_REALTIME_ENABLED", True),
-            voice_realtime_model=os.getenv(
-                "VOICE_REALTIME_MODEL", "gpt-4o-mini-transcribe"
-            ),
             ocr_enabled=ocr_enabled,
             ocr_language=ocr_language,
             ocr_engine=ocr_engine,
@@ -231,5 +222,4 @@ class Settings:
             ocr_save_screenshots=ocr_save_screenshots,
             ocr_debug_save=ocr_debug_save,
             ocr_capture_full_quality=ocr_capture_full_quality,
-            screen_coaching_enabled=screen_coaching_enabled,
         )

@@ -8,6 +8,7 @@ import os
 
 import uvicorn
 
+from aicoach.perf import configure_file_logging
 from aicoach.service.app import create_app
 
 
@@ -30,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    configure_file_logging()
     app = create_app(token=args.token)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0

@@ -1,6 +1,6 @@
 {
     "name": "aicoach-desktop",
-    "version": "0.1.8",
+    "version": "0.1.9",
     "type": "module",
     "private": true,
     "description": "Tiltproof AI desktop app",

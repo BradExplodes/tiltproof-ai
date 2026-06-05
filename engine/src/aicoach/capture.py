@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import io
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 import mss
 from PIL import Image
+
+from aicoach.perf import CaptureBreakdown
 
 
 @dataclass(frozen=True)
@@ -41,7 +44,6 @@ class Screenshot:
         if self.mime_type == "image/png":
             path.write_bytes(self.png_bytes)
             return path
-        # Legacy JPEG captures: lossless container for debug (still JPEG-encoded pixels).
         from PIL import Image
         import io
 
@@ -89,7 +91,6 @@ class ScreenCapturer:
         max_width: int = 1280,
         jpeg_quality: int = 82,
     ) -> None:
-        # mss: 0 = all monitors stitched, 1 = primary, 2+ = other displays.
         self._monitor_index = monitor_index
         self._max_width = max_width
         self._jpeg_quality = jpeg_quality
@@ -116,13 +117,14 @@ class ScreenCapturer:
         *,
         full_quality: bool = False,
         probe: bool = False,
+        breakdown: CaptureBreakdown | None = None,
     ) -> Screenshot:
         """
         Capture the monitor frame.
 
-        full_quality: native resolution PNG (for OCR). Default path resizes/JPEG
-        per CAPTURE_MAX_WIDTH / CAPTURE_JPEG_QUALITY to keep vision API fast/cheap.
-        probe: lightweight drift-check frame (smaller + faster encode).
+        full_quality: native resolution PNG (for OCR).
+        probe: smaller/faster frame for OCR drift checks before a full vision capture.
+        breakdown: optional timing split (mss grab vs PIL encode) for perf diagnosis.
         """
         monitors = self._sct.monitors
         if self._monitor_index >= len(monitors):
@@ -130,8 +132,12 @@ class ScreenCapturer:
                 f"Monitor index {self._monitor_index} not found. "
                 f"Available: 0-{len(monitors) - 1}"
             )
-        raw = self._sct.grab(monitors[self._monitor_index])
 
+        grab_started = time.monotonic()
+        raw = self._sct.grab(monitors[self._monitor_index])
+        grab_s = time.monotonic() - grab_started
+
+        encode_started = time.monotonic()
         img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
         if full_quality:
             max_width = 0
@@ -163,6 +169,11 @@ class ScreenCapturer:
         else:
             img.save(buffer, format="PNG", optimize=True)
             mime = "image/png"
+
+        encode_s = time.monotonic() - encode_started
+        if breakdown is not None:
+            breakdown.grab_s = grab_s
+            breakdown.encode_s = encode_s
 
         return Screenshot(
             png_bytes=buffer.getvalue(),

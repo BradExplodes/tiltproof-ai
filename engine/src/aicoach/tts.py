@@ -61,9 +61,13 @@ def play_audio_file(
     poll_interval_s: float = 0.03,
 ) -> bool:
     """
-    Play WAV via sounddevice. Returns True if played to end, False if interrupted.
+    Play WAV without holding the PortAudio input device (mic uses sounddevice).
+
+    On Windows we spawn a separate PowerShell SoundPlayer process so TTS does not
+    share the same audio backend as the mic capture stream.
     """
-    import sounddevice as sd
+    import subprocess
+    import sys
 
     if not path.exists() or path.stat().st_size < 100:
         raise RuntimeError(f"TTS audio file missing or too small: {path}")
@@ -72,10 +76,41 @@ def play_audio_file(
     if samples.size == 0:
         return True
 
+    duration_s = len(samples) / sample_rate + 0.25
+
+    if sys.platform == "win32":
+        escaped = str(path).replace("'", "''")
+        proc = subprocess.Popen(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                f"(New-Object System.Media.SoundPlayer '{escaped}').PlaySync()",
+            ],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        deadline = time.monotonic() + duration_s + 2.0
+        try:
+            while time.monotonic() < deadline:
+                if stop_check and stop_check():
+                    proc.terminate()
+                    logger.info("TTS playback interrupted (barge-in)")
+                    return False
+                if proc.poll() is not None:
+                    return proc.returncode == 0
+                time.sleep(poll_interval_s)
+            proc.terminate()
+            return False
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+
+    import sounddevice as sd
+
     audio = samples.astype(np.float32) / 32768.0
     sd.play(audio, sample_rate, blocking=False)
     try:
-        deadline = time.monotonic() + len(samples) / sample_rate + 2.0
+        deadline = time.monotonic() + duration_s + 2.0
         while time.monotonic() < deadline:
             if stop_check and stop_check():
                 sd.stop()

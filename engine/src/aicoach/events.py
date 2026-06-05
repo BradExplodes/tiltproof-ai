@@ -24,6 +24,7 @@ COST = "cost"
 ERROR = "error"
 SESSION = "session"
 CONFIG = "config"
+PERF = "perf"
 
 # Coarse lifecycle states for the `status` event.
 STATE_IDLE = "idle"

@@ -62,7 +62,15 @@ export interface RuntimeConfig {
     voice_input_enabled: boolean | null;
     ocr_enabled: boolean | null;
     web_search_enabled: boolean | null;
-    screen_coaching_enabled: boolean | null;
+}
+
+export interface PerfEvent {
+    phase: string;
+    state: string;
+    duration_ms: number;
+    grab_ms?: number;
+    encode_ms?: number;
+    [key: string]: unknown;
 }
 
 export interface EngineSnapshot {
@@ -77,6 +85,7 @@ export interface EngineSnapshot {
     error: string | null;
     games: string[];
     monitors: { index: number; label: string; width: number; height: number }[];
+    lastPerf: PerfEvent | null;
 }
 
 type ControlMessage =
@@ -104,6 +113,7 @@ const INITIAL: EngineSnapshot = {
     error: null,
     games: [],
     monitors: [],
+    lastPerf: null,
 };
 
 export interface EngineApi extends EngineSnapshot {
@@ -143,59 +153,13 @@ export function useEngine(): EngineApi {
                         return { ...prev, config: event as unknown as RuntimeConfig, gameId: (event.game_id as string) ?? prev.gameId };
                     case "transcript": {
                         const text = ((event.text as string) ?? "").trim();
-                        if (!text) return prev;
-                        const partial = Boolean(event.partial);
-                        const itemId = (event.item_id as string) ?? undefined;
+                        if (!text || Boolean(event.partial)) return prev;
                         const ts = (event.ts as string) ?? "";
-
-                        if (partial && itemId) {
-                            const idx = prev.feed.findIndex(
-                                (f) => f.kind === "user" && f.item_id === itemId && f.partial,
-                            );
-                            if (idx >= 0) {
-                                const next = [...prev.feed];
-                                next[idx] = { ...next[idx], text, partial: true, item_id: itemId, ts } as FeedItem;
-                                return { ...prev, feed: next };
-                            }
-                            const item: FeedItem = {
-                                kind: "user",
-                                id: newId(),
-                                ts,
-                                text,
-                                partial: true,
-                                item_id: itemId,
-                            };
-                            return { ...prev, feed: [...prev.feed, item].slice(-MAX_FEED) };
-                        }
-
-                        if (itemId) {
-                            const idx = prev.feed.findIndex(
-                                (f) => f.kind === "user" && f.item_id === itemId,
-                            );
-                            if (idx >= 0) {
-                                const next = [...prev.feed];
-                                next[idx] = {
-                                    kind: "user",
-                                    id: next[idx].id,
-                                    ts,
-                                    text,
-                                    partial: false,
-                                    item_id: itemId,
-                                };
-                                return { ...prev, feed: next };
-                            }
-                        }
-
-                        const item: FeedItem = {
-                            kind: "user",
-                            id: newId(),
-                            ts,
-                            text,
-                            partial: false,
-                            item_id: itemId,
-                        };
+                        const item: FeedItem = { kind: "user", id: newId(), ts, text };
                         return { ...prev, feed: [...prev.feed, item].slice(-MAX_FEED) };
                     }
+                    case "perf":
+                        return { ...prev, lastPerf: event as unknown as PerfEvent };
                     case "advice": {
                         const advice = event as unknown as AdviceEvent;
                         if (advice.skip || !advice.text?.trim()) return prev;
