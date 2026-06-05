@@ -39,11 +39,10 @@ export const UpdateBanner = ({ updater }: { updater: UpdaterApi }) => {
         return (
             <div className="flex items-center justify-between gap-3 border-b border-brand bg-brand-secondary px-4 py-2.5 text-sm text-brand-secondary">
                 <span>
-                    <strong className="font-semibold">Update v{version} is ready.</strong> Restart to install the latest
-                    version.
+                    <strong className="font-semibold">Update v{version} is ready.</strong> Restart to apply the update.
                 </span>
                 <Button color="primary" size="sm" onClick={updater.install}>
-                    Install & restart
+                    Restart & update
                 </Button>
             </div>
         );

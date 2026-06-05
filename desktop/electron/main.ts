@@ -200,7 +200,8 @@ ipcMain.handle("update:check", async () => {
 
 ipcMain.handle("update:install", () => {
     if (DEV_URL) return { ok: false };
-    autoUpdater.quitAndInstall();
+    // Silent in-place upgrade: /S + --updated (electron-updater NSIS defaults).
+    autoUpdater.quitAndInstall(true, true);
     return { ok: true };
 });
 

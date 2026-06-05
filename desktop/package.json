@@ -1,6 +1,6 @@
 {
     "name": "aicoach-desktop",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "type": "module",
     "private": true,
     "description": "Tiltproof AI desktop app",
@@ -45,7 +45,7 @@
         "nsis": {
             "oneClick": false,
             "perMachine": false,
-            "allowToChangeInstallationDirectory": true,
+            "allowToChangeInstallationDirectory": false,
             "deleteAppDataOnUninstall": false
         },
         "publish": [
