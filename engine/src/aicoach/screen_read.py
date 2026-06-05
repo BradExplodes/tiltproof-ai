@@ -195,7 +195,9 @@ class ScreenReader:
         transcript set without force_vision: voice-only OCR when appropriate.
         """
         if force_vision or transcript is None:
-            observation, usage = self._describer.describe(screenshot, game_id)
+            observation, usage = self._describer.describe(
+                screenshot, game_id, focus=transcript
+            )
             probe = self._pending_probe_ocr_text
             observation = reconcile_screen_observation(
                 observation, ocr_text=probe or None, game_id=game_id
@@ -205,7 +207,9 @@ class ScreenReader:
 
         if not self._voice_may_use_ocr(transcript, scene_sync=scene_sync):
             logger.info("Voice screen read: using vision (not OCR path)")
-            observation, usage = self._describer.describe(screenshot, game_id)
+            observation, usage = self._describer.describe(
+                screenshot, game_id, focus=transcript
+            )
             probe = self._pending_probe_ocr_text
             observation = reconcile_screen_observation(
                 observation, ocr_text=probe or None, game_id=game_id
@@ -317,7 +321,9 @@ class ScreenReader:
             method = "ocr+vision"
 
         print("(reading screen with vision…)", flush=True)
-        observation, usage = self._describer.describe(screenshot, game_id)
+        observation, usage = self._describer.describe(
+            screenshot, game_id, focus=transcript
+        )
         probe = ocr_text or self._pending_probe_ocr_text
         observation = reconcile_screen_observation(
             observation, ocr_text=probe or None, game_id=game_id

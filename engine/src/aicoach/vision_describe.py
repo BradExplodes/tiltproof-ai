@@ -17,9 +17,17 @@ _VISION_DETAIL_DEFAULT = "high"
 _DESCRIBER_FORMAT = """
 Output format (no other commentary):
 SCREEN_TYPE: menu | map_select | gameplay | results | lobby | loading | pause | desktop_other | unknown
-SEARCH_QUERY: Artist - Title exactly as shown on map select, else NONE
+SEARCH_QUERY: the specific map/match/title shown (e.g. "Artist - Title" on a song/map select), else NONE
 DESCRIPTION:
-<key UI facts in 4–8 short sentences. CRITICAL: song select / map_select shows BPM, stars, AR/OD, mods and often a beatmap PREVIEW with circles in the background — that is still map_select, NOT gameplay. Only use gameplay when the live score/combo/accuracy HUD is visible during active play. Report song progress % ONLY on gameplay, never on song select or menu.>
+<An exhaustive, literal rundown of EVERYTHING visible on screen, organized clearly. Cover, when present:
+- The overall scene and what the player is doing right now.
+- Every HUD value with its EXACT number: health/HP, mana, shields, score, combo, accuracy %, timer/clock, ammo, gold/currency, KDA, rank/rating, level/XP, match or song progress %, etc.
+- All readable text: titles, menu items, button labels, player/character names, chat, notifications, tooltips, objectives.
+- Characters/units/players visible: who/what they are, their positions, and states (alive/dead, low HP, casting, stunned, etc.).
+- Map/minimap details, objectives, icons, ability/cooldown indicators, and anything actionable.
+- Spatial layout (top-left, center, bottom-right, etc.) so positions are unambiguous.
+Be specific and quantitative — prefer exact numbers and proper names over vague summaries. Aim for 6–12 sentences. Never invent anything you cannot actually see; if a region is unreadable, say so.
+CRITICAL: a beatmap/song PREVIEW playing behind a song/map select menu is still map_select, NOT gameplay. Only use gameplay when the live in-match HUD is visible during active play. Report match/song progress % ONLY during gameplay, never on a menu or select screen.>
 """
 
 
@@ -32,7 +40,7 @@ class ScreenDescriber:
         model: str,
         image_detail: str = _VISION_DETAIL_DEFAULT,
         temperature: float = 0.2,
-        max_tokens: int = 450,
+        max_tokens: int = 900,
     ) -> None:
         detail = image_detail.strip().lower()
         if detail not in ("low", "high"):
@@ -47,6 +55,8 @@ class ScreenDescriber:
         self,
         screenshot: Screenshot,
         game_id: str,
+        *,
+        focus: str | None = None,
     ) -> tuple[ScreenObservation, UsageCost | None]:
         mime = screenshot.mime_type or "image/png"
         image_b64 = base64.standard_b64encode(screenshot.png_bytes).decode("ascii")
@@ -54,12 +64,19 @@ class ScreenDescriber:
 
         system = load_describer_prompt(game_id) + "\n\n" + _DESCRIBER_FORMAT.strip()
         user_text = (
-            "Describe this game screenshot concisely but literally. "
-            "Decide screen type first: menu vs map_select (song select) vs gameplay vs results. "
-            "Beatmap preview circles on song select are NOT gameplay. "
-            "Map title, BPM, stars, AR/OD on select; username on menu; "
-            "song progress % and live combo/acc ONLY if actively playing."
+            "Describe this game screenshot in exhaustive, literal detail, following the output format. "
+            "First decide the screen type. Then describe everything visible: every stat with its exact "
+            "value, all readable text, every character/unit/player and their state, map/minimap and "
+            "objectives, and where each element sits on screen. Be specific and quantitative; never "
+            "invent details you cannot actually see."
         )
+        focus = (focus or "").strip()
+        if focus:
+            user_text += (
+                f'\n\nThe player just said: "{focus}". In addition to the full-screen rundown, '
+                "find and describe in extra detail whatever on screen is relevant to what they said "
+                "(exact numbers, names, positions, states). If nothing on screen relates to it, note that briefly."
+            )
 
         size_kb = screenshot.size_kb
         dims = (

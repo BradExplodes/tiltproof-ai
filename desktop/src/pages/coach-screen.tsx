@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { LogOut01, Microphone01, Play, Globe01, VolumeMax } from "@untitledui/icons";
 import { Badge, BadgeWithDot } from "@/components/base/badges/badges";
 import type { BadgeColors } from "@/components/base/badges/badge-types";
@@ -20,9 +20,16 @@ const STATE_BADGE: Record<EngineState, { color: BadgeColors; label: string }> = 
     error: { color: "error", label: "Error" },
 };
 
+// Live "reasoning" shown in the feed while the engine is mid-action.
+const ACTIVITY: Partial<Record<EngineState, string>> = {
+    starting: "Starting up…",
+    capturing: "Reading your screen…",
+    transcribing: "Transcribing your speech…",
+    thinking: "Thinking…",
+    speaking: "Speaking…",
+};
+
 const prettyGame = (id: string) => id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-const usd = (n: number | undefined | null) => `$${(n ?? 0).toFixed(4)}`;
-const usd2 = (n: number | undefined | null) => `$${(n ?? 0).toFixed(2)}`;
 
 export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
     const engine = useEngine();
@@ -33,21 +40,30 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
     const voiceOn = engine.config?.voice_input_enabled ?? true;
     const webOn = engine.config?.web_search_enabled ?? true;
 
-    // Keep the monthly usage/quota readout fresh as cycles accrue cost on the backend.
+    // Refresh usage as cycles accrue cost on the backend.
     const cycleCount = engine.cost?.call_count ?? 0;
     useEffect(() => {
         void auth.refreshMe();
     }, [cycleCount, auth.refreshMe]);
 
     const me = auth.me;
-    const overQuota = me ? me.quota_usd > 0 && me.used_usd >= me.quota_usd : false;
+    const unlimited = me ? me.quota_usd <= 0 : false;
+    const usagePct = me && me.quota_usd > 0 ? Math.min(100, (me.used_usd / me.quota_usd) * 100) : 0;
+    const overQuota = !unlimited && me != null && usagePct >= 100;
+
+    const activity = ACTIVITY[engine.state];
+
+    // Keep the feed pinned to the newest message/activity.
+    const feedEndRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        feedEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, [engine.feed, activity]);
 
     return (
         <div className="flex h-dvh flex-col bg-primary text-primary">
-            {/* Header */}
             <header className="flex items-center justify-between border-b border-secondary px-6 py-4">
                 <div className="flex items-center gap-3">
-                    <span className="text-lg font-semibold">AI Coach</span>
+                    <span className="text-lg font-semibold">Tiltproof AI</span>
                     <BadgeWithDot type="pill-color" color={stateInfo.color} size="md">
                         {stateInfo.label}
                     </BadgeWithDot>
@@ -58,11 +74,10 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                     </BadgeWithDot>
                     {me && (
                         <span className="text-sm text-tertiary">
-                            Monthly{" "}
+                            Usage{" "}
                             <span className={overQuota ? "font-medium text-error-primary" : "font-medium text-primary"}>
-                                {usd2(me.used_usd)}
+                                {unlimited ? "Unlimited" : `${Math.round(usagePct)}%`}
                             </span>
-                            {me.quota_usd > 0 && <span className="text-quaternary"> / {usd2(me.quota_usd)}</span>}
                         </span>
                     )}
                     <div className="flex items-center gap-2 border-l border-secondary pl-3">
@@ -82,9 +97,9 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                 </div>
             </header>
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[1fr_320px]">
-                {/* Main: controls + live feed */}
-                <main className="flex min-h-0 flex-col gap-5">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[1fr_380px]">
+                {/* Main: controls + room for future panels */}
+                <main className="flex min-h-0 flex-col gap-5 overflow-y-auto">
                     <section className="flex flex-wrap items-end gap-3 rounded-xl border border-secondary bg-secondary p-4">
                         <div className="min-w-56 flex-1">
                             <Select
@@ -117,63 +132,28 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
 
                     {overQuota && (
                         <section className="rounded-xl border border-error_subtle bg-error-primary p-3 text-sm text-error-primary">
-                            You've reached this month's usage limit ({usd2(me?.quota_usd)}). It resets at the start of next month.
+                            You've reached this month's usage limit. It resets at the start of next month.
                         </section>
                     )}
 
-                    <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-secondary bg-secondary">
-                        <div className="border-b border-secondary px-4 py-3">
-                            <h2 className="text-sm font-semibold text-secondary">Coach feed</h2>
-                        </div>
-                        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-                            {engine.transcript && (
-                                <div className="self-end rounded-lg rounded-br-sm bg-brand-solid px-3 py-2 text-sm text-white">
-                                    {engine.transcript}
-                                </div>
-                            )}
-                            {engine.advices.length === 0 && !engine.transcript ? (
-                                <p className="m-auto text-center text-sm text-tertiary">
-                                    {engine.running ? "Listening for something worth saying…" : "Pick a game and press start."}
-                                </p>
-                            ) : (
-                                engine.advices.map((a, i) => (
-                                    <article key={`${a.ts}-${i}`} className="rounded-lg border border-secondary bg-primary p-3">
-                                        <div className="mb-1.5 flex items-center gap-2">
-                                            <Badge type="color" color={a.trigger === "voice" ? "brand" : "blue"} size="sm">
-                                                {a.trigger === "voice" ? "Voice" : "Screen"}
-                                            </Badge>
-                                            {a.scene && (
-                                                <span className="text-xs font-medium text-tertiary">{a.scene}</span>
-                                            )}
-                                        </div>
-                                        <p className="text-md text-primary">{a.text}</p>
-                                    </article>
-                                ))
-                            )}
-                        </div>
-                    </section>
-                </main>
-
-                {/* Sidebar: cost + settings */}
-                <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto">
                     <section className="rounded-xl border border-secondary bg-secondary p-4">
-                        <h2 className="mb-3 text-sm font-semibold text-secondary">Cost</h2>
-                        <p className="text-display-xs font-semibold text-primary">{usd(engine.cost?.session_usd)}</p>
-                        <p className="mb-3 text-xs text-tertiary">{engine.cost?.call_count ?? 0} cycles this session</p>
-                        <dl className="flex flex-col gap-1.5 text-sm">
-                            {[
-                                ["Last cycle", engine.cost?.cycle_usd],
-                                ["Vision", engine.cost?.breakdown.vision_usd],
-                                ["Voice (STT)", engine.cost?.breakdown.stt_usd],
-                                ["Speech (TTS)", engine.cost?.breakdown.tts_usd],
-                                ["Web", engine.cost?.breakdown.web_usd],
-                            ].map(([label, value]) => (
-                                <div key={label as string} className="flex justify-between">
-                                    <dt className="text-tertiary">{label}</dt>
-                                    <dd className="font-medium text-secondary">{usd(value as number)}</dd>
-                                </div>
-                            ))}
-                        </dl>
+                        <div className="mb-2 flex items-center justify-between">
+                            <h2 className="text-sm font-semibold text-secondary">Usage this month</h2>
+                            <span className="text-sm font-medium text-primary">
+                                {unlimited ? "Unlimited" : `${Math.round(usagePct)}%`}
+                            </span>
+                        </div>
+                        {!unlimited && (
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-tertiary">
+                                <div
+                                    className={`h-full rounded-full transition-all ${overQuota ? "bg-error-solid" : "bg-brand-solid"}`}
+                                    style={{ width: `${usagePct}%` }}
+                                />
+                            </div>
+                        )}
+                        <p className="mt-2 text-xs text-tertiary">
+                            {unlimited ? "No usage cap on your account." : "Resets at the start of each month."}
+                        </p>
                     </section>
 
                     <section className="rounded-xl border border-secondary bg-secondary p-4">
@@ -203,7 +183,10 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                                     size="sm"
                                     selectedKey={String(engine.config?.monitor_index ?? 1)}
                                     onSelectionChange={(key) => engine.updateConfig({ monitor_index: Number(key) })}
-                                    items={engine.monitors.map((m) => ({ id: String(m.index), label: `${m.index}: ${m.width}×${m.height}` }))}
+                                    items={engine.monitors.map((m) => ({
+                                        id: String(m.index),
+                                        label: `${m.index}: ${m.width}×${m.height}`,
+                                    }))}
                                 >
                                     {(item) => <Select.Item id={item.id} label={item.label} />}
                                 </Select>
@@ -222,6 +205,68 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                             {engine.error}
                         </section>
                     )}
+                </main>
+
+                {/* Right: coach feed widget */}
+                <aside className="flex min-h-0 flex-col rounded-xl border border-secondary bg-secondary">
+                    <div className="flex items-center justify-between border-b border-secondary px-4 py-3">
+                        <h2 className="text-sm font-semibold text-secondary">Coach feed</h2>
+                        {activity && (
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-tertiary">
+                                <span className="size-1.5 animate-pulse rounded-full bg-brand-solid" />
+                                {activity}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+                        {engine.feed.length === 0 && !activity ? (
+                            <p className="m-auto text-center text-sm text-tertiary">
+                                {engine.running ? "Listening for something worth saying…" : "Pick a game and press start."}
+                            </p>
+                        ) : (
+                            engine.feed.map((item) =>
+                                item.kind === "user" ? (
+                                    <div
+                                        key={item.id}
+                                        className={`max-w-[85%] self-end rounded-lg rounded-br-sm px-3 py-2 text-sm text-white ${
+                                            item.partial ? "bg-brand-solid/80" : "bg-brand-solid"
+                                        }`}
+                                    >
+                                        {item.text}
+                                        {item.partial && (
+                                            <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-white/90 align-middle" />
+                                        )}
+                                    </div>
+                                ) : (
+                                    <article
+                                        key={item.id}
+                                        className="max-w-[92%] self-start rounded-lg border border-secondary bg-primary p-3"
+                                    >
+                                        <div className="mb-1.5 flex items-center gap-2">
+                                            <Badge
+                                                type="color"
+                                                color={item.advice.trigger === "voice" ? "brand" : "blue"}
+                                                size="sm"
+                                            >
+                                                {item.advice.trigger === "voice" ? "Voice" : "Screen"}
+                                            </Badge>
+                                            {item.advice.scene && (
+                                                <span className="text-xs font-medium text-tertiary">{item.advice.scene}</span>
+                                            )}
+                                        </div>
+                                        <p className="text-md text-primary">{item.advice.text}</p>
+                                    </article>
+                                ),
+                            )
+                        )}
+                        {activity && (
+                            <div className="flex items-center gap-2 self-start rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-tertiary">
+                                <span className="size-1.5 animate-pulse rounded-full bg-brand-solid" />
+                                {activity}
+                            </div>
+                        )}
+                        <div ref={feedEndRef} />
+                    </div>
                 </aside>
             </div>
         </div>

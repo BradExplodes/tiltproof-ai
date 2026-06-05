@@ -50,6 +50,10 @@ export interface AdviceEvent {
     monitor_index: number | null;
 }
 
+export type FeedItem =
+    | { kind: "user"; id: string; ts: string; text: string; partial?: boolean; item_id?: string }
+    | { kind: "advice"; id: string; ts: string; advice: AdviceEvent };
+
 export interface RuntimeConfig {
     game_id: string | null;
     monitor_index: number;
@@ -66,8 +70,7 @@ export interface EngineSnapshot {
     running: boolean;
     gameId: string | null;
     config: RuntimeConfig | null;
-    transcript: string;
-    advices: AdviceEvent[];
+    feed: FeedItem[];
     cost: CostEvent | null;
     error: string | null;
     games: string[];
@@ -81,8 +84,11 @@ type ControlMessage =
     | { action: "update_config"; config: Partial<RuntimeConfig> }
     | { action: "get_state" };
 
-const MAX_ADVICES = 100;
+const MAX_FEED = 200;
 const RECONNECT_MS = 1500;
+
+const newId = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
 const INITIAL: EngineSnapshot = {
     connected: false,
@@ -91,8 +97,7 @@ const INITIAL: EngineSnapshot = {
     running: false,
     gameId: null,
     config: null,
-    transcript: "",
-    advices: [],
+    feed: [],
     cost: null,
     error: null,
     games: [],
@@ -134,10 +139,67 @@ export function useEngine(): EngineApi {
                         return { ...prev, running: Boolean(event.running), gameId: (event.game_id as string) ?? prev.gameId };
                     case "config":
                         return { ...prev, config: event as unknown as RuntimeConfig, gameId: (event.game_id as string) ?? prev.gameId };
-                    case "transcript":
-                        return { ...prev, transcript: event.text as string };
-                    case "advice":
-                        return { ...prev, advices: [event as unknown as AdviceEvent, ...prev.advices].slice(0, MAX_ADVICES) };
+                    case "transcript": {
+                        const text = ((event.text as string) ?? "").trim();
+                        if (!text) return prev;
+                        const partial = Boolean(event.partial);
+                        const itemId = (event.item_id as string) ?? undefined;
+                        const ts = (event.ts as string) ?? "";
+
+                        if (partial && itemId) {
+                            const idx = prev.feed.findIndex(
+                                (f) => f.kind === "user" && f.item_id === itemId && f.partial,
+                            );
+                            if (idx >= 0) {
+                                const next = [...prev.feed];
+                                next[idx] = { ...next[idx], text, partial: true, item_id: itemId, ts } as FeedItem;
+                                return { ...prev, feed: next };
+                            }
+                            const item: FeedItem = {
+                                kind: "user",
+                                id: newId(),
+                                ts,
+                                text,
+                                partial: true,
+                                item_id: itemId,
+                            };
+                            return { ...prev, feed: [...prev.feed, item].slice(-MAX_FEED) };
+                        }
+
+                        if (itemId) {
+                            const idx = prev.feed.findIndex(
+                                (f) => f.kind === "user" && f.item_id === itemId,
+                            );
+                            if (idx >= 0) {
+                                const next = [...prev.feed];
+                                next[idx] = {
+                                    kind: "user",
+                                    id: next[idx].id,
+                                    ts,
+                                    text,
+                                    partial: false,
+                                    item_id: itemId,
+                                };
+                                return { ...prev, feed: next };
+                            }
+                        }
+
+                        const item: FeedItem = {
+                            kind: "user",
+                            id: newId(),
+                            ts,
+                            text,
+                            partial: false,
+                            item_id: itemId,
+                        };
+                        return { ...prev, feed: [...prev.feed, item].slice(-MAX_FEED) };
+                    }
+                    case "advice": {
+                        const advice = event as unknown as AdviceEvent;
+                        if (advice.skip || !advice.text?.trim()) return prev;
+                        const item: FeedItem = { kind: "advice", id: newId(), ts: advice.ts ?? "", advice };
+                        return { ...prev, feed: [...prev.feed, item].slice(-MAX_FEED) };
+                    }
                     case "cost":
                         return { ...prev, cost: event as unknown as CostEvent };
                     case "error":

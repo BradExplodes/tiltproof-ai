@@ -23,6 +23,7 @@ hidden = (
         "starlette",
         "anyio",
         "websockets",
+        "websocket",
         "httptools",
         "sounddevice",
         "winocr",

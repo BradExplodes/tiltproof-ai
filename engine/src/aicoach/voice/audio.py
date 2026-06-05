@@ -7,6 +7,7 @@ from typing import Iterable
 import numpy as np
 
 SAMPLE_RATE = 16_000
+REALTIME_SAMPLE_RATE = 24_000
 
 
 def pcm_rms(pcm_int16: bytes) -> float:
@@ -33,3 +34,18 @@ def frames_to_wav_bytes(chunks: Iterable[bytes], sample_rate: int = SAMPLE_RATE)
         wf.setframerate(sample_rate)
         wf.writeframes(pcm)
     return buffer.getvalue()
+
+
+def resample_pcm16(pcm_int16: bytes, src_rate: int, dst_rate: int) -> bytes:
+    """Linear resample mono int16 PCM (e.g. 16 kHz mic -> 24 kHz Realtime API)."""
+    if src_rate == dst_rate or not pcm_int16:
+        return pcm_int16
+    samples = np.frombuffer(pcm_int16, dtype=np.int16).astype(np.float32)
+    if samples.size == 0:
+        return b""
+    ratio = dst_rate / src_rate
+    out_len = max(1, int(round(samples.size * ratio)))
+    x_src = np.arange(samples.size, dtype=np.float32)
+    x_dst = np.linspace(0, samples.size - 1, out_len, dtype=np.float32)
+    resampled = np.interp(x_dst, x_src, samples)
+    return resampled.astype(np.int16).tobytes()

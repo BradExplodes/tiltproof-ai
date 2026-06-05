@@ -6,7 +6,12 @@ import threading
 import time
 from dataclasses import dataclass
 
+from typing import TYPE_CHECKING
+
 from aicoach.voice.audio import SAMPLE_RATE, pcm_rms
+
+if TYPE_CHECKING:
+    from aicoach.voice.realtime_stt import RealtimeTranscriber
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,9 @@ class MicUtterance:
     pcm_chunks: list[bytes]
     duration_s: float
     peak_rms: float
+    item_id: str | None = None
+    realtime_transcript: str | None = None
+    realtime_seconds: float | None = None
 
 
 class VoiceListener:
@@ -35,6 +43,7 @@ class VoiceListener:
         barge_speech_ms: int = 1500,
         max_utterance_s: float = 25.0,
         block_ms: int = 30,
+        transcriber: RealtimeTranscriber | None = None,
     ) -> None:
         if not 0 < min_rms < 1:
             raise ValueError("min_rms must be between 0 and 1")
@@ -49,6 +58,8 @@ class VoiceListener:
         self._max_utterance_s = max_utterance_s
         self._block_ms = block_ms
         self._block_samples = int(SAMPLE_RATE * block_ms / 1000)
+        self._transcriber = transcriber
+        self._utterance_item_id: str | None = None
 
         self._queue: queue.Queue[MicUtterance] = queue.Queue()
         self._coach_speaking = threading.Event()
@@ -59,7 +70,8 @@ class VoiceListener:
         self._stream = None
 
     def start(self) -> None:
-        import sounddevice as sd
+        if self._transcriber is not None:
+            self._transcriber.start()
 
         self._stop.clear()
         self._thread = threading.Thread(
@@ -83,6 +95,8 @@ class VoiceListener:
         if self._thread:
             self._thread.join(timeout=2.0)
         self._thread = None
+        if self._transcriber is not None:
+            self._transcriber.stop()
 
     def set_coach_speaking(self, active: bool) -> None:
         """Mic stays on during TTS; valid new speech queues + barges in."""
@@ -163,9 +177,13 @@ class VoiceListener:
                         silence_blocks = 0
                         barge_loud_blocks = 0
                         peak_rms = 0.0
+                        if self._transcriber is not None and self._transcriber.available:
+                            self._utterance_item_id = self._transcriber.begin_utterance()
                     self._user_speaking.set()
                     peak_rms = max(peak_rms, level)
                     chunks.append(pcm)
+                    if self._transcriber is not None and self._transcriber.available:
+                        self._transcriber.append(pcm)
                     speech_blocks += 1
                     silence_blocks = 0
                     if self._coach_speaking.is_set() and loud_for_barge:
@@ -250,11 +268,22 @@ class VoiceListener:
             duration,
             peak_rms,
         )
+        item_id = self._utterance_item_id
+        realtime_transcript: str | None = None
+        realtime_seconds: float | None = None
+        if self._transcriber is not None and self._transcriber.available and item_id:
+            result = self._transcriber.finish_utterance(audio_duration_s=duration)
+            if result is not None:
+                realtime_transcript, realtime_seconds = result
+        self._utterance_item_id = None
         self._queue.put(
             MicUtterance(
                 pcm_chunks=list(chunks),
                 duration_s=duration,
                 peak_rms=peak_rms,
+                item_id=item_id,
+                realtime_transcript=realtime_transcript,
+                realtime_seconds=realtime_seconds,
             )
         )
         if self._coach_speaking.is_set():

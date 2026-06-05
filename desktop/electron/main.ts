@@ -89,6 +89,7 @@ ipcMain.handle("auth:logout", async () => {
 
 async function createWindow(): Promise<void> {
     mainWindow = new BrowserWindow({
+        title: "Tiltproof AI",
         width: 1100,
         height: 740,
         minWidth: 880,

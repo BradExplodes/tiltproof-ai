@@ -8,10 +8,12 @@ from dataclasses import replace
 from typing import Callable
 
 from aicoach import events as ev
+from aicoach.backend_client import report_stt_usage
 from aicoach.capture import ScreenCapturer, Screenshot
 from aicoach.coach import AICoach, CoachAdvice
 from aicoach.config import Settings
 from aicoach.cycle_timings import CycleTimings
+from aicoach.pricing import estimate_stt_cost_usd
 from aicoach.prompts import load_prompt
 from aicoach.tts import OpenAITTS
 from aicoach.voice import (
@@ -22,6 +24,7 @@ from aicoach.voice import (
     voice_should_use_vision_read,
     voice_wants_fresh_screen_read,
 )
+from aicoach.voice.realtime_stt import RealtimeTranscriber
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,13 @@ class CoachRunner:
                 model=settings.tts_model,
                 voice=settings.tts_voice,
             )
+        self._realtime_stt: RealtimeTranscriber | None = None
+        if settings.voice_input_enabled and settings.voice_realtime_enabled:
+            self._realtime_stt = RealtimeTranscriber(
+                session_token=settings.openai_api_key,
+                model=settings.voice_realtime_model,
+                on_partial=self._on_realtime_partial,
+            )
         self._voice: VoiceListener | None = None
         if settings.voice_input_enabled:
             try:
@@ -96,6 +106,7 @@ class CoachRunner:
                     min_speech_ms=settings.voice_min_speech_ms,
                     barge_speech_ms=settings.voice_barge_speech_ms,
                     max_utterance_s=settings.voice_max_utterance_seconds,
+                    transcriber=self._realtime_stt,
                 )
             except Exception:
                 logger.exception("Voice input unavailable — continuing screen-only")
@@ -115,6 +126,14 @@ class CoachRunner:
             self._on_event(event)
         except Exception:
             logger.exception("event consumer raised; dropping event")
+
+    def _on_realtime_partial(self, text: str, item_id: str) -> None:
+        trimmed = text.strip()
+        if not trimmed:
+            return
+        self._emit(
+            ev.transcript_event(trimmed, partial=True, item_id=item_id),
+        )
 
     def _emit_cost(self, advice: CoachAdvice) -> None:
         self._emit(
@@ -458,15 +477,32 @@ class CoachRunner:
         print("(processing your speech…)", flush=True)
         logger.info("Voice utterance ended — transcribing")
         self._emit(ev.status_event(ev.STATE_TRANSCRIBING, game_id=self._game_id))
-        try:
-            transcript, stt_s, stt_usd = transcribe_utterance(
-                self._settings.openai_api_key,
-                utterance.pcm_chunks,
-                model=self._settings.voice_stt_model,
+
+        transcript = ""
+        stt_s = 0.0
+        stt_usd = 0.0
+
+        if utterance.realtime_transcript and len(utterance.realtime_transcript) >= 2:
+            transcript = utterance.realtime_transcript
+            stt_s = utterance.realtime_seconds or utterance.duration_s
+            stt_usd = estimate_stt_cost_usd(
+                self._settings.voice_realtime_model, stt_s
             )
-        except Exception:
-            logger.exception("Speech-to-text failed")
-            return
+            report_stt_usage(
+                seconds=stt_s,
+                model=self._settings.voice_realtime_model,
+            )
+        else:
+            try:
+                transcript, stt_s, stt_usd = transcribe_utterance(
+                    self._settings.openai_api_key,
+                    utterance.pcm_chunks,
+                    model=self._settings.voice_stt_model,
+                )
+            except Exception:
+                logger.exception("Speech-to-text failed")
+                return
+
         timings.stt_s = stt_s
         timings.stt_usd = stt_usd
         self._session_cost_usd += stt_usd
@@ -488,7 +524,13 @@ class CoachRunner:
             f"STT: ~${stt_usd:.4f} ({stt_s:.1f}s API) — starting coach",
             flush=True,
         )
-        self._emit(ev.transcript_event(transcript))
+        self._emit(
+            ev.transcript_event(
+                transcript,
+                partial=False,
+                item_id=utterance.item_id,
+            ),
+        )
 
         if self._voice_turn_cancelled():
             return

@@ -140,9 +140,9 @@ export async function fetchMe(): Promise<MeResponse | null> {
 
 function resultPage(ok: boolean): string {
     const msg = ok
-        ? "You're signed in. You can close this tab and return to AI Coach."
-        : "Sign-in failed. Please return to AI Coach and try again.";
-    return `<!doctype html><html><head><meta charset="utf-8"><title>AI Coach</title>
+        ? "You're signed in. You can close this tab and return to Tiltproof AI."
+        : "Sign-in failed. Please return to Tiltproof AI and try again.";
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Tiltproof AI</title>
 <style>body{font-family:system-ui,sans-serif;background:#0c0e12;color:#e5e7eb;display:flex;height:100vh;margin:0;align-items:center;justify-content:center;text-align:center}div{max-width:30rem;padding:2rem}h1{font-size:1.25rem}</style>
 </head><body><div><h1>${ok ? "Signed in" : "Sign-in failed"}</h1><p>${msg}</p></div></body></html>`;
 }

@@ -24,7 +24,7 @@ export const LoginScreen = ({ auth }: { auth: AuthApi }) => {
         <div className="flex h-dvh flex-col items-center justify-center bg-primary px-6 text-center text-primary">
             <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-secondary bg-secondary p-8">
                 <div className="flex flex-col items-center gap-2">
-                    <h1 className="text-display-xs font-semibold text-primary">AI Coach</h1>
+                    <h1 className="text-display-xs font-semibold text-primary">Tiltproof AI</h1>
                     <p className="text-md text-tertiary">Sign in to start your coaching session.</p>
                 </div>
 

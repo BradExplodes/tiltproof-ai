@@ -49,8 +49,16 @@ def status_event(state: str, detail: str = "", **extra: Any) -> dict[str, Any]:
     return _envelope(STATUS, state=state, detail=detail, **extra)
 
 
-def transcript_event(text: str) -> dict[str, Any]:
-    return _envelope(TRANSCRIPT, text=text)
+def transcript_event(
+    text: str,
+    *,
+    partial: bool = False,
+    item_id: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"text": text, "partial": partial}
+    if item_id is not None:
+        payload["item_id"] = item_id
+    return _envelope(TRANSCRIPT, **payload)
 
 
 def error_event(message: str) -> dict[str, Any]:

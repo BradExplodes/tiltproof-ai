@@ -1,9 +1,9 @@
 {
     "name": "aicoach-desktop",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "type": "module",
     "private": true,
-    "description": "AI Coach desktop app",
+    "description": "Tiltproof AI desktop app",
     "author": "TiltProof",
     "main": "dist-electron/main.js",
     "scripts": {
@@ -17,8 +17,8 @@
         "preview": "vite preview"
     },
     "build": {
-        "appId": "net.tiltproof.aicoach",
-        "productName": "AI Coach",
+        "appId": "net.tiltproof.app",
+        "productName": "Tiltproof AI",
         "directories": {
             "output": "release",
             "buildResources": "build"

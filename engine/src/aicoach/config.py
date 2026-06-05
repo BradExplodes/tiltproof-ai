@@ -50,6 +50,8 @@ class Settings:
     voice_barge_speech_ms: int
     voice_max_utterance_seconds: float
     voice_stt_model: str
+    voice_realtime_enabled: bool
+    voice_realtime_model: str
     ocr_enabled: bool
     ocr_language: str
     ocr_engine: str
@@ -95,7 +97,7 @@ class Settings:
         if not 0 <= capture_jpeg_quality <= 95:
             raise ValueError("CAPTURE_JPEG_QUALITY must be 0 (PNG) or 1–95.")
 
-        describe_max_tokens = int(os.getenv("DESCRIBE_MAX_TOKENS", "450"))
+        describe_max_tokens = int(os.getenv("DESCRIBE_MAX_TOKENS", "900"))
         if describe_max_tokens < 150:
             raise ValueError("DESCRIBE_MAX_TOKENS must be at least 150.")
 
@@ -210,6 +212,10 @@ class Settings:
             voice_barge_speech_ms=voice_barge_speech_ms,
             voice_max_utterance_seconds=voice_max_utterance,
             voice_stt_model=os.getenv("VOICE_STT_MODEL", "whisper-1"),
+            voice_realtime_enabled=_env_bool("VOICE_REALTIME_ENABLED", True),
+            voice_realtime_model=os.getenv(
+                "VOICE_REALTIME_MODEL", "gpt-4o-mini-transcribe"
+            ),
             ocr_enabled=ocr_enabled,
             ocr_language=ocr_language,
             ocr_engine=ocr_engine,
