@@ -40,6 +40,7 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
     const voiceOn = engine.config?.voice_input_enabled ?? true;
     const ocrOn = engine.config?.ocr_enabled ?? true;
     const webOn = engine.config?.web_search_enabled ?? true;
+    const screenOn = engine.config?.screen_coaching_enabled ?? true;
 
     // Refresh usage as cycles accrue cost on the backend.
     const cycleCount = engine.cost?.call_count ?? 0;
@@ -174,13 +175,23 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                             />
                             <Toggle
                                 size="sm"
+                                label="Automatic screen coaching"
+                                isSelected={screenOn}
+                                onChange={(v) => engine.updateConfig({ screen_coaching_enabled: v })}
+                            />
+                            <p className="-mt-2 text-xs text-tertiary">
+                                Periodic screen reads while idle. Turn off to eliminate capture/vision lag during
+                                play; voice chat still works.
+                            </p>
+                            <Toggle
+                                size="sm"
                                 label="Screen OCR (local)"
                                 isSelected={ocrOn}
                                 onChange={(v) => engine.updateConfig({ ocr_enabled: v })}
                             />
                             <p className="-mt-2 text-xs text-tertiary">
-                                Turn off to skip Tesseract/OpenCV and test whether local OCR is causing lag.
-                                Intervals and vision coaching still run.
+                                Local text recognition for voice questions. When off, the coach reuses recent screen
+                                context instead of running OCR every interval.
                             </p>
                             <Toggle
                                 size="sm"

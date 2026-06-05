@@ -33,6 +33,7 @@ class RuntimeConfig:
     voice_input_enabled: bool | None = None
     ocr_enabled: bool | None = None
     web_search_enabled: bool | None = None
+    screen_coaching_enabled: bool | None = None
 
     def merged(self, patch: dict[str, Any]) -> "RuntimeConfig":
         allowed = {f for f in RuntimeConfig.__dataclass_fields__}
@@ -48,6 +49,7 @@ class RuntimeConfig:
             "voice_input_enabled": self.voice_input_enabled,
             "ocr_enabled": self.ocr_enabled,
             "web_search_enabled": self.web_search_enabled,
+            "screen_coaching_enabled": self.screen_coaching_enabled,
         }
 
     def apply_to(self, settings: Settings) -> Settings:
@@ -62,6 +64,8 @@ class RuntimeConfig:
             changes["ocr_enabled"] = self.ocr_enabled
         if self.web_search_enabled is not None:
             changes["web_search_enabled"] = self.web_search_enabled
+        if self.screen_coaching_enabled is not None:
+            changes["screen_coaching_enabled"] = self.screen_coaching_enabled
         return replace(settings, **changes) if changes else settings
 
 

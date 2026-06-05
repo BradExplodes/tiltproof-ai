@@ -117,6 +117,7 @@ class CoachRunner:
         self._call_count = 0
         self._last_screenshot: Screenshot | None = None
         self._last_screenshot_at: float = 0.0
+        self._last_partial_emit_at: float = 0.0
 
     def _emit(self, event: dict) -> None:
         """Forward a structured event to the UI consumer; never crash the loop."""
@@ -131,9 +132,33 @@ class CoachRunner:
         trimmed = text.strip()
         if not trimmed:
             return
+        now = time.monotonic()
+        if now - self._last_partial_emit_at < 0.45:
+            return
+        self._last_partial_emit_at = now
         self._emit(
             ev.transcript_event(trimmed, partial=True, item_id=item_id),
         )
+
+    def _set_mic_paused(self, paused: bool) -> None:
+        if self._voice:
+            self._voice.set_listen_paused(paused)
+
+    def _screen_cycle_skippable(self) -> tuple[bool, str]:
+        if not self._settings.screen_coaching_enabled:
+            return True, "screen coaching off"
+        if not self._coach.has_cached_observation():
+            return False, ""
+        age = self._coach.screen_read_age_s()
+        interval = self._settings.capture_interval_seconds
+        if age >= interval:
+            return False, ""
+        scene = self._coach.last_scene
+        if scene == "gameplay":
+            return True, f"gameplay cache fresh ({age:.0f}s)"
+        if not self._coach.ocr_active:
+            return True, f"cache fresh ({age:.0f}s, OCR off)"
+        return False, ""
 
     def _emit_cost(self, advice: CoachAdvice) -> None:
         self._emit(
@@ -371,20 +396,33 @@ class CoachRunner:
         return advice
 
     def _run_screen_cycle(self) -> None:
+        skippable, skip_reason = self._screen_cycle_skippable()
+        if skippable:
+            logger.debug("Screen cycle skipped: %s", skip_reason)
+            return
+
         cycle_start = time.monotonic()
         timings = CycleTimings()
-        self._emit(ev.status_event(ev.STATE_CAPTURING, game_id=self._game_id))
-        capture_started = time.monotonic()
-        screenshot = self._capturer.capture()
-        timings.capture_s = time.monotonic() - capture_started
-        self._record_screenshot(screenshot)
-        if self._settings.save_screenshots:
-            path = screenshot.save(self._settings.screenshots_dir)
-            logger.info("Saved screenshot to %s", path)
+        self._set_mic_paused(True)
+        try:
+            self._run_screen_cycle_inner(cycle_start, timings)
+        finally:
+            self._set_mic_paused(False)
 
-        if self._coach.has_cached_observation():
+    def _run_screen_cycle_inner(
+        self, cycle_start: float, timings: CycleTimings
+    ) -> None:
+        self._emit(ev.status_event(ev.STATE_CAPTURING, game_id=self._game_id))
+        screenshot: Screenshot | None = None
+
+        if self._coach.has_cached_observation() and self._coach.ocr_active:
+            probe_started = time.monotonic()
+            probe_shot = self._capturer.capture(probe=True)
+            timings.extra.append(
+                f"light probe capture: {time.monotonic() - probe_started:.2f}s"
+            )
             changed, drift_reason = self._coach.probe_screen_change(
-                screenshot,
+                probe_shot,
                 self._game_id,
             )
             timings.extra.append(f"OCR drift check: {drift_reason}")
@@ -408,6 +446,18 @@ class CoachRunner:
                     )
                 )
                 return
+            capture_started = time.monotonic()
+            screenshot = self._capturer.capture()
+            timings.capture_s = time.monotonic() - capture_started
+        else:
+            capture_started = time.monotonic()
+            screenshot = self._capturer.capture()
+            timings.capture_s = time.monotonic() - capture_started
+
+        self._record_screenshot(screenshot)
+        if self._settings.save_screenshots:
+            path = screenshot.save(self._settings.screenshots_dir)
+            logger.info("Saved screenshot to %s", path)
 
         self._emit(ev.status_event(ev.STATE_THINKING, game_id=self._game_id))
         advice = self._coach.analyze(
@@ -535,10 +585,14 @@ class CoachRunner:
         if self._voice_turn_cancelled():
             return
 
-        capture_started = time.monotonic()
-        screenshot = self._capture_for_ocr()
-        timings.capture_s = time.monotonic() - capture_started
-        self._record_screenshot(screenshot)
+        self._set_mic_paused(True)
+        try:
+            capture_started = time.monotonic()
+            screenshot = self._capture_for_ocr()
+            timings.capture_s = time.monotonic() - capture_started
+            self._record_screenshot(screenshot)
+        finally:
+            self._set_mic_paused(False)
 
         refresh_needed = True
         refresh_reason = "no OCR baseline"
@@ -578,19 +632,23 @@ class CoachRunner:
 
         vision_only = voice_should_use_vision_read(transcript)
 
-        self._emit(ev.status_event(ev.STATE_THINKING, game_id=self._game_id))
-        advice = self._coach.respond_to_user(
-            transcript,
-            game_id=self._game_id,
-            system_prompt=self._system_prompt,
-            screenshot=screenshot,
-            refresh_screen=refresh_read,
-            vision_only=vision_only,
-            prefetched_ocr_text=prefetched or None,
-            screen_ocr_verified=screen_ocr_verified,
-            scene_sync=scene_sync,
-            timings=timings,
-        )
+        self._set_mic_paused(True)
+        try:
+            self._emit(ev.status_event(ev.STATE_THINKING, game_id=self._game_id))
+            advice = self._coach.respond_to_user(
+                transcript,
+                game_id=self._game_id,
+                system_prompt=self._system_prompt,
+                screenshot=screenshot,
+                refresh_screen=refresh_read,
+                vision_only=vision_only,
+                prefetched_ocr_text=prefetched or None,
+                screen_ocr_verified=screen_ocr_verified,
+                scene_sync=scene_sync,
+                timings=timings,
+            )
+        finally:
+            self._set_mic_paused(False)
 
         if advice.skip or not advice.text:
             return
@@ -618,6 +676,8 @@ class CoachRunner:
         self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
 
     def _screen_cycle_due(self, last_screen_cycle: float) -> bool:
+        if not self._settings.screen_coaching_enabled:
+            return False
         if self._voice and (
             self._voice.is_user_speaking()
             or self._voice.is_coach_speaking()

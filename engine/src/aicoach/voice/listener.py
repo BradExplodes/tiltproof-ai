@@ -65,6 +65,7 @@ class VoiceListener:
         self._coach_speaking = threading.Event()
         self._barge_in = threading.Event()
         self._user_speaking = threading.Event()
+        self._listen_paused = threading.Event()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._stream = None
@@ -97,6 +98,13 @@ class VoiceListener:
         self._thread = None
         if self._transcriber is not None:
             self._transcriber.stop()
+
+    def set_listen_paused(self, paused: bool) -> None:
+        """Pause mic reads during screen capture / API work (reduces audio driver contention)."""
+        if paused:
+            self._listen_paused.set()
+        else:
+            self._listen_paused.clear()
 
     def set_coach_speaking(self, active: bool) -> None:
         """Mic stays on during TTS; valid new speech queues + barges in."""
@@ -162,6 +170,9 @@ class VoiceListener:
         ) as stream:
             self._stream = stream
             while not self._stop.is_set():
+                if self._listen_paused.is_set():
+                    time.sleep(self._block_ms / 1000.0)
+                    continue
                 data, _overflowed = stream.read(blocksize)
                 pcm = bytes(data)
                 level = pcm_rms(pcm)

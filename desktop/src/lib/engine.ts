@@ -62,6 +62,7 @@ export interface RuntimeConfig {
     voice_input_enabled: boolean | null;
     ocr_enabled: boolean | null;
     web_search_enabled: boolean | null;
+    screen_coaching_enabled: boolean | null;
 }
 
 export interface EngineSnapshot {

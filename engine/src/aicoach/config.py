@@ -65,6 +65,7 @@ class Settings:
     ocr_save_screenshots: bool
     ocr_debug_save: bool
     ocr_capture_full_quality: bool
+    screen_coaching_enabled: bool
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -179,9 +180,10 @@ class Settings:
         if ocr_max_width < 640:
             raise ValueError("OCR_MAX_WIDTH must be at least 640.")
         ocr_voice_fast = _env_bool("OCR_VOICE_FAST", True)
-        ocr_save_screenshots = _env_bool("OCR_SAVE_SCREENSHOTS", True)
+        ocr_save_screenshots = _env_bool("OCR_SAVE_SCREENSHOTS", False)
         ocr_debug_save = _env_bool("OCR_DEBUG_SAVE", False)
         ocr_capture_full_quality = _env_bool("OCR_CAPTURE_FULL_QUALITY", True)
+        screen_coaching_enabled = _env_bool("SCREEN_COACHING_ENABLED", True)
 
         return cls(
             openai_api_key=api_key,
@@ -229,4 +231,5 @@ class Settings:
             ocr_save_screenshots=ocr_save_screenshots,
             ocr_debug_save=ocr_debug_save,
             ocr_capture_full_quality=ocr_capture_full_quality,
+            screen_coaching_enabled=screen_coaching_enabled,
         )

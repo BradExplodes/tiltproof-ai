@@ -173,6 +173,10 @@ class AICoach:
     def ocr_active(self) -> bool:
         return self._screen_reader.ocr_active
 
+    @property
+    def last_scene(self) -> str:
+        return self._last_scene
+
     def has_cached_observation(self) -> bool:
         return self._cached_observation is not None
 

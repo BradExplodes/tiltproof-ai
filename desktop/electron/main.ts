@@ -35,6 +35,7 @@ function startEngine(): void {
     // but cannot run a coaching session.
     const session = loadSession();
     const env: NodeJS.ProcessEnv = { ...process.env };
+    env.OCR_SAVE_SCREENSHOTS = "false";
     if (session) {
         env.AICOACH_OPENAI_BASE_URL = `${BACKEND_BASE}/openai/v1`;
         env.AICOACH_PROXY_TOKEN = session.token;

@@ -141,7 +141,7 @@ class ScreenReader:
         """
         if not self._ocr_enabled:
             self._pending_probe_ocr_text = ""
-            return True, "OCR disabled — interval refresh (no local OCR)"
+            return False, "OCR disabled — using cache TTL"
         try:
             ocr_text, elapsed = self.run_quick_ocr(screenshot)
             self._pending_probe_ocr_text = ocr_text

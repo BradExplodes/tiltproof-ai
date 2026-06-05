@@ -76,6 +76,10 @@ def list_monitors() -> list[dict[str, int | str]]:
         return result
 
 
+_PROBE_MAX_WIDTH = 720
+_PROBE_JPEG_QUALITY = 70
+
+
 class ScreenCapturer:
     """Captures one monitor (default: primary) as PNG bytes."""
 
@@ -89,6 +93,7 @@ class ScreenCapturer:
         self._monitor_index = monitor_index
         self._max_width = max_width
         self._jpeg_quality = jpeg_quality
+        self._sct = mss.mss()
 
     @property
     def monitor_index(self) -> int:
@@ -103,29 +108,48 @@ class ScreenCapturer:
                 )
         return f"index {self._monitor_index}"
 
-    def capture(self, *, full_quality: bool = False) -> Screenshot:
+    def close(self) -> None:
+        self._sct.close()
+
+    def capture(
+        self,
+        *,
+        full_quality: bool = False,
+        probe: bool = False,
+    ) -> Screenshot:
         """
         Capture the monitor frame.
 
         full_quality: native resolution PNG (for OCR). Default path resizes/JPEG
         per CAPTURE_MAX_WIDTH / CAPTURE_JPEG_QUALITY to keep vision API fast/cheap.
+        probe: lightweight drift-check frame (smaller + faster encode).
         """
-        with mss.mss() as sct:
-            monitors = sct.monitors
-            if self._monitor_index >= len(monitors):
-                raise ValueError(
-                    f"Monitor index {self._monitor_index} not found. "
-                    f"Available: 0-{len(monitors) - 1}"
-                )
-            raw = sct.grab(monitors[self._monitor_index])
+        monitors = self._sct.monitors
+        if self._monitor_index >= len(monitors):
+            raise ValueError(
+                f"Monitor index {self._monitor_index} not found. "
+                f"Available: 0-{len(monitors) - 1}"
+            )
+        raw = self._sct.grab(monitors[self._monitor_index])
 
         img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
-        max_width = 0 if full_quality else self._max_width
-        jpeg_quality = 0 if full_quality else self._jpeg_quality
+        if full_quality:
+            max_width = 0
+            jpeg_quality = 0
+            resample = Image.Resampling.LANCZOS
+        elif probe:
+            max_width = _PROBE_MAX_WIDTH
+            jpeg_quality = _PROBE_JPEG_QUALITY
+            resample = Image.Resampling.BILINEAR
+        else:
+            max_width = self._max_width
+            jpeg_quality = self._jpeg_quality
+            resample = Image.Resampling.LANCZOS
+
         if max_width and img.width > max_width:
             ratio = max_width / img.width
             new_size = (max_width, int(img.height * ratio))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            img = img.resize(new_size, resample)
 
         buffer = io.BytesIO()
         if jpeg_quality > 0:
@@ -133,7 +157,7 @@ class ScreenCapturer:
                 buffer,
                 format="JPEG",
                 quality=jpeg_quality,
-                optimize=True,
+                optimize=not probe,
             )
             mime = "image/jpeg"
         else:
