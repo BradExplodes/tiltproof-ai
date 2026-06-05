@@ -18,6 +18,15 @@ export interface MeResponse {
     quota_usd: number;
 }
 
+export type UpdateState = "idle" | "checking" | "available" | "downloading" | "ready" | "error" | "none";
+
+export interface UpdateStatus {
+    state: UpdateState;
+    version?: string;
+    percent?: number;
+    message?: string;
+}
+
 declare global {
     interface Window {
         aicoach: {
@@ -26,6 +35,10 @@ declare global {
             getMe: () => Promise<MeResponse | null>;
             login: () => Promise<Session>;
             logout: () => Promise<{ ok: boolean }>;
+            getAppVersion: () => Promise<string>;
+            checkForUpdates: () => Promise<{ ok: boolean; reason?: string }>;
+            installUpdate: () => Promise<{ ok: boolean }>;
+            onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void;
         };
     }
 }

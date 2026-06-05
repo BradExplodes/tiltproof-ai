@@ -1,9 +1,13 @@
+import type { ReactNode } from "react";
+import { UpdateBanner } from "@/components/update-banner";
 import { useAuth } from "@/lib/auth";
+import { useUpdater } from "@/lib/updater";
 import { CoachScreen } from "@/pages/coach-screen";
 import { LoginScreen } from "@/pages/login-screen";
 
 export const App = () => {
     const auth = useAuth();
+    const updater = useUpdater();
 
     if (!auth.available) {
         return (
@@ -26,7 +30,14 @@ export const App = () => {
         );
     }
 
-    if (!auth.session) return <LoginScreen auth={auth} />;
+    const shell = (content: ReactNode) => (
+        <div className="flex h-dvh flex-col">
+            <UpdateBanner updater={updater} />
+            <div className="min-h-0 flex-1">{content}</div>
+        </div>
+    );
 
-    return <CoachScreen auth={auth} />;
+    if (!auth.session) return shell(<LoginScreen auth={auth} />);
+
+    return shell(<CoachScreen auth={auth} />);
 };

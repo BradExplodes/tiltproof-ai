@@ -115,14 +115,82 @@ async function createWindow(): Promise<void> {
     });
 }
 
-/** Check GitHub Releases for a newer version and install on quit (packaged builds only). */
-function setupAutoUpdate(): void {
-    if (DEV_URL) return; // never in dev
-    autoUpdater.autoDownload = true;
-    autoUpdater.on("error", (err) => console.error("[updater]", err));
-    autoUpdater.on("update-downloaded", (info) => console.log("[updater] update ready:", info.version));
-    void autoUpdater.checkForUpdatesAndNotify().catch((err) => console.error("[updater] check failed", err));
+type UpdateState = "idle" | "checking" | "available" | "downloading" | "ready" | "error" | "none";
+
+interface UpdateStatusPayload {
+    state: UpdateState;
+    version?: string;
+    percent?: number;
+    message?: string;
 }
+
+function sendUpdateStatus(status: UpdateStatusPayload): void {
+    mainWindow?.webContents.send("update:status", status);
+}
+
+/** Check GitHub Releases; download in background; user installs via in-app banner. */
+function setupAutoUpdate(): void {
+    if (DEV_URL) return;
+
+    let pendingVersion: string | undefined;
+
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = false;
+
+    autoUpdater.on("checking-for-update", () => {
+        sendUpdateStatus({ state: "checking" });
+    });
+
+    autoUpdater.on("update-available", (info) => {
+        pendingVersion = info.version;
+        sendUpdateStatus({ state: "available", version: info.version });
+    });
+
+    autoUpdater.on("update-not-available", () => {
+        sendUpdateStatus({ state: "none" });
+    });
+
+    autoUpdater.on("download-progress", (progress) => {
+        sendUpdateStatus({
+            state: "downloading",
+            percent: progress.percent,
+            version: pendingVersion,
+        });
+    });
+
+    autoUpdater.on("update-downloaded", (info) => {
+        console.log("[updater] update ready:", info.version);
+        sendUpdateStatus({ state: "ready", version: info.version });
+    });
+
+    autoUpdater.on("error", (err) => {
+        console.error("[updater]", err);
+        sendUpdateStatus({ state: "error", message: err.message });
+    });
+
+    void autoUpdater.checkForUpdates().catch((err) => {
+        console.error("[updater] check failed", err);
+        sendUpdateStatus({ state: "error", message: String(err) });
+    });
+}
+
+ipcMain.handle("update:check", async () => {
+    if (DEV_URL) return { ok: false, reason: "dev" };
+    try {
+        await autoUpdater.checkForUpdates();
+        return { ok: true };
+    } catch (err) {
+        return { ok: false, reason: String(err) };
+    }
+});
+
+ipcMain.handle("update:install", () => {
+    if (DEV_URL) return { ok: false };
+    autoUpdater.quitAndInstall();
+    return { ok: true };
+});
+
+ipcMain.handle("app:version", () => app.getVersion());
 
 app.whenReady().then(() => {
     startEngine();

@@ -20,6 +20,15 @@ export interface MeResponse {
     quota_usd: number;
 }
 
+export type UpdateState = "idle" | "checking" | "available" | "downloading" | "ready" | "error" | "none";
+
+export interface UpdateStatus {
+    state: UpdateState;
+    version?: string;
+    percent?: number;
+    message?: string;
+}
+
 const api = {
     /** Resolve the local engine's WebSocket/HTTP endpoints and auth token. */
     getEngineInfo: (): Promise<EngineInfo> => ipcRenderer.invoke("engine:info"),
@@ -31,6 +40,18 @@ const api = {
     login: (): Promise<Session> => ipcRenderer.invoke("auth:login"),
     /** Revoke and clear the session. */
     logout: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("auth:logout"),
+    /** Installed app version from package.json. */
+    getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:version"),
+    /** Ask the main process to check GitHub Releases for a newer build. */
+    checkForUpdates: (): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke("update:check"),
+    /** Download complete — quit and install the pending update. */
+    installUpdate: (): Promise<{ ok: boolean }> => ipcRenderer.invoke("update:install"),
+    /** Subscribe to update lifecycle events from the main process. */
+    onUpdateStatus: (callback: (status: UpdateStatus) => void): (() => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status);
+        ipcRenderer.on("update:status", handler);
+        return () => ipcRenderer.removeListener("update:status", handler);
+    },
 };
 
 contextBridge.exposeInMainWorld("aicoach", api);
