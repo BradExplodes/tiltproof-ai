@@ -34,7 +34,7 @@ git init
 git add .                # backend/ is gitignored, so it won't be included
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/bradexplodes/tiltproof-ai.git   # PUBLIC repo
+git remote add origin https://github.com/BradExplodes/tiltproof-ai.git   # PUBLIC repo
 git push -u origin main
 ```
 
@@ -46,7 +46,7 @@ git init
 git add .
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/bradexplodes/tiltproof-ai-backend.git   # PRIVATE repo
+git remote add origin https://github.com/BradExplodes/tiltproof-ai-backend.git   # PRIVATE repo
 git push -u origin main
 ```
 
@@ -60,7 +60,7 @@ Already configured in `desktop/package.json` → `build.publish` to publish to a
 auto-update from the public repo:
 
 ```json
-"publish": [{ "provider": "github", "owner": "bradexplodes", "repo": "tiltproof-ai" }]
+"publish": [{ "provider": "github", "owner": "BradExplodes", "repo": "tiltproof-ai" }]
 ```
 
 ### 3. Secrets
