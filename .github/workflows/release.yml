@@ -55,10 +55,12 @@ jobs:
                   cache: "npm"
                   cache-dependency-path: desktop/package-lock.json
 
-            # Build only — upload via action-gh-release (electron-builder's built-in
-            # publish often exits 0 without creating release assets in CI).
+            # Build only — upload via action-gh-release. On tag pushes electron-builder
+            # would otherwise auto-publish (needs GH_TOKEN) and fail without it.
             - name: Build desktop installer
               working-directory: desktop
+              env:
+                  CSC_IDENTITY_AUTO_DISCOVERY: false
               run: |
                   npm ci
                   npm run dist

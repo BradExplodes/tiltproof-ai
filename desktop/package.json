@@ -12,13 +12,16 @@
         "build:renderer": "tsc -b && vite build",
         "build:electron": "tsc -p electron/tsconfig.json && node scripts/write-electron-pkg.mjs",
         "build": "npm run build:renderer && npm run build:electron",
-        "dist": "npm run build && electron-builder",
+        "dist": "npm run build && electron-builder --publish never",
         "publish": "npm run build && electron-builder --win --publish always",
         "preview": "vite preview"
     },
     "build": {
         "appId": "net.tiltproof.app",
         "productName": "Tiltproof AI",
+        "toolsets": {
+            "winCodeSign": "1.1.0"
+        },
         "directories": {
             "output": "release",
             "buildResources": "build"
