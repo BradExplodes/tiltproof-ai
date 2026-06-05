@@ -20,6 +20,20 @@ def _token_set(text: str) -> set[str]:
     return {t for t in text.split() if len(t) >= 2 or t.isdigit()}
 
 
+# Score/combo/accuracy digits churn every frame during play — not a scene change.
+_VOLATILE_HUD_RE = re.compile(
+    r"\b\d{1,6}x\b|\b\d{1,3}\.\d{2}\s*%|\b\d{4,}\b|\b\d+\b",
+    re.IGNORECASE,
+)
+
+
+def stable_ocr_text(text: str) -> str:
+    """OCR text with volatile HUD numbers stripped (for gameplay drift checks)."""
+    norm = normalize_ocr_text(text)
+    norm = _VOLATILE_HUD_RE.sub(" ", norm)
+    return re.sub(r"\s+", " ", norm).strip()
+
+
 def ocr_similarity(previous: str, current: str) -> float:
     """1.0 = identical normalized OCR; 0.0 = completely different."""
     prev = normalize_ocr_text(previous)
@@ -69,6 +83,7 @@ def ocr_substantially_changed(
     *,
     game_id: str = "osu",
     similarity_threshold: float = 0.72,
+    scene_hint: str = "",
 ) -> tuple[bool, str]:
     """
     Returns (changed, reason).
@@ -81,10 +96,29 @@ def ocr_substantially_changed(
     curr_norm = normalize_ocr_text(current)
     if not curr_norm:
         return True, "current OCR empty"
+
+    from aicoach.scene_classify import infer_screen_type_from_text
+
+    in_gameplay = scene_hint == "gameplay" or (
+        infer_screen_type_from_text(previous, game_id) == "gameplay"
+        and infer_screen_type_from_text(current, game_id) == "gameplay"
+    )
+    if in_gameplay:
+        prev_stable = stable_ocr_text(previous)
+        curr_stable = stable_ocr_text(current)
+        if prev_stable and curr_stable:
+            if prev_stable == curr_stable:
+                return False, "gameplay HUD drift ignored (labels unchanged)"
+            stable_sim = ocr_similarity(prev_stable, curr_stable)
+            if stable_sim >= 0.5:
+                pct = int(stable_sim * 100)
+                return False, f"gameplay HUD drift ignored ({pct}% stable)"
+
     prev_map = map_content_fingerprint(previous, game_id)
     curr_map = map_content_fingerprint(current, game_id)
     if prev_map and curr_map and prev_map != curr_map:
         return True, "map/song fingerprint changed"
+
     if prev_norm == curr_norm:
         return False, "OCR text unchanged"
     similarity = ocr_similarity(previous, current)
@@ -154,23 +188,10 @@ def ocr_scene_changed(
 
     probe_l = probe_ocr.lower()
     desc_l = cached.description.lower()
-    results_markers = (
-        "failed",
-        "passed",
-        "local score",
-        "performance",
-        "rank #",
-        "rank:",
-        "retry",
-        "back to menu",
-        "max combo",
-        "slider tick",
-        "great",
-        "meh",
-    )
+    from aicoach.osu_results import osu_results_screen_signals
     from aicoach.scene_classify import infer_screen_type_from_text
 
-    probe_results = any(m in probe_l for m in results_markers)
+    probe_results = osu_results_screen_signals(probe_l, probe_ocr)
     cache_gameplay = prev_type == "gameplay" or infer_screen_type_from_text(
         cached.description, game_id
     ) == "gameplay"
@@ -178,8 +199,8 @@ def ocr_scene_changed(
         return True, "OCR shows results/failed; cached context was gameplay"
 
     probe_gameplay = infer_screen_type_from_text(probe_ocr, game_id) == "gameplay"
-    cache_results = prev_type in ("results", "map_select", "menu") or any(
-        m in desc_l for m in results_markers
+    cache_results = prev_type in ("results", "map_select", "menu") or (
+        osu_results_screen_signals(desc_l, cached.description)
     )
     if probe_gameplay and cache_results:
         return True, "OCR shows active play; cached context was post-play/results"

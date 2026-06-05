@@ -14,17 +14,68 @@ class OsuResultsStats(TypedDict, total=False):
     pp: float
 
 
-def osu_results_hit_breakdown_visible(lower: str) -> bool:
+# Results-only UI — not shown on live gameplay HUDs (even with G/O/M/M counter skins).
+_RESULTS_EXCLUSIVE_MARKERS = (
+    "failed",
+    "passed",
+    "retry",
+    "back to menu",
+    "local score",
+    "performance",
+    "slider tick",
+    "slider end",
+    "spinner bonus",
+    "spinner spin",
+    "rank #",
+    "rank:",
+)
+
+
+def osu_live_play_excludes_results(lower: str, ocr_text: str) -> bool:
+    """
+    True when text looks like active play — many skins show Great/Ok/Meh/Miss
+    counters during the map, which must not be classified as the results screen.
+    """
+    if re.search(r"\b\d+x\b", lower):
+        return True
+    if any(w in lower for w in ("x100", "x50", "xmiss", "100k", "50k")):
+        return True
+    has_live_acc = "accuracy" in lower and re.search(
+        r"\b\d{1,3}\.\d{2}\s*%", ocr_text
+    )
+    has_score = "score" in lower and re.search(r"\b\d{4,}\b", ocr_text)
+    has_combo = (
+        "combo" in lower
+        and "max combo" not in lower
+        and re.search(r"\bcombo\b[^0-9]*\d{2,}", lower)
+    )
+    if sum([bool(has_live_acc), bool(has_score), bool(has_combo)]) >= 2:
+        return True
+    return False
+
+
+def osu_results_hit_breakdown_visible(lower: str, *, ocr_text: str | None = None) -> bool:
     """
     Post-play results summary: Great / Ok / Meh / Miss counts (not live gameplay HUD).
     """
+    text = ocr_text if ocr_text is not None else lower
+    if osu_live_play_excludes_results(lower, text):
+        return False
+
     has_great = bool(re.search(r"\bgreat\b", lower))
     has_ok = bool(re.search(r"\bok\b", lower))
     has_meh = bool(re.search(r"\bmeh\b", lower))
     has_miss = bool(re.search(r"\bmiss(?:es)?\b", lower))
     label_count = sum([has_great, has_ok, has_meh, has_miss])
+
     if label_count >= 3:
-        return True
+        # Hit-counter skins during play — require results-only chrome as well.
+        if any(m in lower for m in _RESULTS_EXCLUSIVE_MARKERS):
+            return True
+        if "max combo" in lower and re.search(r"\b\d{1,3}\.\d{2}\s*%", text):
+            return True
+        return False
+
     if has_great and has_miss and any(
         w in lower
         for w in (
@@ -41,9 +92,12 @@ def osu_results_hit_breakdown_visible(lower: str) -> bool:
     return False
 
 
-def osu_results_screen_signals(lower: str) -> bool:
+def osu_results_screen_signals(lower: str, ocr_text: str | None = None) -> bool:
     """Results / fail screen — includes pass and fail summaries."""
-    if osu_results_hit_breakdown_visible(lower):
+    text = ocr_text if ocr_text is not None else lower
+    if osu_live_play_excludes_results(lower, text):
+        return False
+    if osu_results_hit_breakdown_visible(lower, ocr_text=text):
         return True
     if any(w in lower for w in ("failed", "passed", "retry", "back to menu")):
         return True
@@ -123,7 +177,7 @@ def parse_osu_results_stats(ocr_text: str) -> OsuResultsStats:
     if pp_m:
         stats["pp"] = float(pp_m.group(1))
 
-    if osu_results_hit_breakdown_visible(lower):
+    if osu_results_hit_breakdown_visible(lower, ocr_text=ocr_text):
         run = _parse_four_count_run(lower)
         if run:
             stats.update(run)

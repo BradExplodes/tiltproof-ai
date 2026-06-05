@@ -98,18 +98,22 @@ class ScreenReader:
     def ocr_active(self) -> bool:
         return self._ocr_enabled
 
-    def _quick_ocr_params(self) -> tuple[float, str, bool]:
+    def _quick_ocr_params(self) -> tuple[float, str, bool, int]:
+        """Lightweight params for idle drift probes (minimize CPU during gameplay)."""
+        return 1.25, "game_fast", False, 960
+
+    def _voice_ocr_params(self) -> tuple[float, str, bool, int]:
         scale = min(self._ocr_scale_factor, 1.5) if self._ocr_voice_fast else self._ocr_scale_factor
         if self._ocr_voice_fast:
             preprocess = "game_fast"
         else:
             preprocess = self._ocr_preprocess_mode
         multi = False if self._ocr_voice_fast else self._ocr_multi_psm
-        return scale, preprocess, multi
+        return scale, preprocess, multi, self._ocr_max_width
 
     def run_quick_ocr(self, screenshot: Screenshot) -> tuple[str, float]:
         """Fast OCR pass for drift detection (not a full screen read)."""
-        scale, preprocess, multi = self._quick_ocr_params()
+        scale, preprocess, multi, max_width = self._quick_ocr_params()
         return recognize_screenshot(
             screenshot,
             self._ocr_lang,
@@ -119,7 +123,7 @@ class ScreenReader:
             scale_factor=scale,
             preprocess_mode=preprocess,
             multi_psm=multi,
-            max_width=self._ocr_max_width,
+            max_width=max_width,
             save_capture_dir=self._ocr_save_dir,
             save_capture_tag="probe",
         )[:2]
@@ -129,13 +133,15 @@ class ScreenReader:
         screenshot: Screenshot,
         *,
         game_id: str = "osu",
+        scene_hint: str = "",
     ) -> tuple[bool, str]:
         """
         Compare current screen OCR to the last committed baseline.
         Does not update the baseline — call commit_ocr_baseline after a full read.
         """
         if not self._ocr_enabled:
-            return True, "OCR disabled — assuming changed"
+            self._pending_probe_ocr_text = ""
+            return True, "OCR disabled — interval refresh (no local OCR)"
         try:
             ocr_text, elapsed = self.run_quick_ocr(screenshot)
             self._pending_probe_ocr_text = ocr_text
@@ -143,6 +149,7 @@ class ScreenReader:
                 self._baseline_ocr_text,
                 ocr_text,
                 game_id=game_id,
+                scene_hint=scene_hint,
             )
             logger.info(
                 "OCR drift check: %s (%.2fs, %d chars)",
@@ -217,16 +224,11 @@ class ScreenReader:
             self.commit_ocr_baseline(probe)
             return observation, usage, "vision", ""
 
-        scale = self._ocr_scale_factor
-        preprocess = self._ocr_preprocess_mode
-        multi_psm = self._ocr_multi_psm
+        scale, preprocess, multi_psm, ocr_max_width = self._voice_ocr_params()
         if self._ocr_voice_fast:
-            scale = min(scale, 1.5)
-            preprocess = "game_fast"
-            multi_psm = False
             logger.info(
                 "Voice screen read: Tesseract OCR (fast path, max width %d)",
-                self._ocr_max_width,
+                ocr_max_width,
             )
         else:
             logger.info("Voice screen read: using Tesseract OCR")
@@ -264,7 +266,7 @@ class ScreenReader:
                     scale_factor=scale,
                     preprocess_mode=preprocess,
                     multi_psm=multi_psm,
-                    max_width=self._ocr_max_width,
+                    max_width=ocr_max_width,
                     save_capture_dir=self._ocr_save_dir,
                     save_capture_tag="read",
                     save_debug_path=debug_path,

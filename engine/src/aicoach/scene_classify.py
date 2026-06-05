@@ -71,7 +71,10 @@ def _osu_map_select_signals(lower: str) -> bool:
     return False
 
 
-def _osu_menu_signals(lower: str) -> bool:
+def _osu_menu_signals(lower: str, ocr_text: str | None = None) -> bool:
+    text = ocr_text if ocr_text is not None else lower
+    if osu_results_screen_signals(lower, text):
+        return False
     if any(w in lower for w in ("main menu", "click to start", "back to menu")):
         return True
     if "osu!" in lower and any(
@@ -81,15 +84,15 @@ def _osu_menu_signals(lower: str) -> bool:
     return False
 
 
-def _osu_results_signals(lower: str) -> bool:
-    return osu_results_screen_signals(lower)
+def _osu_results_signals(lower: str, ocr_text: str) -> bool:
+    return osu_results_screen_signals(lower, ocr_text)
 
 
 def _osu_live_gameplay_hud(lower: str, ocr_text: str) -> bool:
     """Active play HUD — not song-select star % or background preview."""
-    if _osu_map_select_signals(lower) or _osu_menu_signals(lower):
+    if _osu_map_select_signals(lower) or _osu_menu_signals(lower, ocr_text):
         return False
-    if _osu_results_signals(lower):
+    if _osu_results_signals(lower, ocr_text):
         return False
 
     has_acc = "accuracy" in lower and re.search(r"\b\d{1,3}\.\d{2}\s*%", ocr_text)
@@ -115,14 +118,15 @@ def infer_screen_type_from_text(ocr_text: str, game_id: str) -> str:
         return "unknown"
 
     if game_id == "osu":
-        if _osu_results_signals(lower):
-            return "results"
-        if _osu_menu_signals(lower) and not _osu_map_select_signals(lower):
+        if _osu_menu_signals(lower, ocr_text) and not _osu_map_select_signals(lower):
             return "menu"
         if _osu_map_select_signals(lower):
             return "map_select"
+        # Before results — G/O/M/M counter skins look like results to naive OCR.
         if _osu_live_gameplay_hud(lower, ocr_text):
             return "gameplay"
+        if _osu_results_signals(lower, ocr_text):
+            return "results"
 
     if len(ocr_text.strip()) < 40:
         return "unknown"
@@ -159,7 +163,7 @@ def description_suggests_map_select(description: str) -> bool:
 
 def description_suggests_menu(description: str) -> bool:
     lower = description.lower()
-    return _osu_menu_signals(lower) or any(
+    return _osu_menu_signals(lower, description) or any(
         p in lower for p in ("main menu", "title screen", "menu screen", "mode select")
     )
 
@@ -208,6 +212,12 @@ def reconcile_screen_observation(
             corrected, reason = "map_select", "song-select UI in description"
         elif description_suggests_menu(obs.description):
             corrected, reason = "menu", "menu UI in description"
+    elif declared == "results":
+        if ocr_type == "gameplay" or description_suggests_gameplay(obs.description):
+            corrected, reason = (
+                "gameplay",
+                "live HUD with hit counters — not post-play results",
+            )
     elif declared == "unknown":
         corrected = ocr_type if ocr_type != "unknown" else desc_type
 

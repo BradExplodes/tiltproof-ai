@@ -184,7 +184,14 @@ class AICoach:
 
     def probe_screen_change(self, screenshot: Screenshot, game_id: str) -> tuple[bool, str]:
         """Fast OCR compare vs last full read — True if the screen likely changed."""
-        return self._screen_reader.probe_screen_change(screenshot, game_id=game_id)
+        scene_hint = self._last_scene
+        if self._cached_observation and self._cached_observation.screen_type:
+            scene_hint = self._cached_observation.screen_type
+        return self._screen_reader.probe_screen_change(
+            screenshot,
+            game_id=game_id,
+            scene_hint=scene_hint,
+        )
 
     def cached_observation_still_valid(self, game_id: str) -> tuple[bool, str]:
         """Cross-check cached vision/OCR against the probe OCR from this capture."""
@@ -219,8 +226,12 @@ class AICoach:
         if not probe.strip():
             return True, "probe OCR empty"
         baseline = self._screen_reader._baseline_ocr_text  # noqa: SLF001
+        scene_hint = self._cached_observation.screen_type or self._last_scene
         changed, drift_reason = ocr_substantially_changed(
-            baseline, probe, game_id=game_id
+            baseline,
+            probe,
+            game_id=game_id,
+            scene_hint=scene_hint,
         )
         if changed:
             return True, drift_reason

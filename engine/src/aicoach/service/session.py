@@ -31,6 +31,7 @@ class RuntimeConfig:
     interval_seconds: float | None = None
     tts_enabled: bool | None = None
     voice_input_enabled: bool | None = None
+    ocr_enabled: bool | None = None
     web_search_enabled: bool | None = None
 
     def merged(self, patch: dict[str, Any]) -> "RuntimeConfig":
@@ -45,6 +46,7 @@ class RuntimeConfig:
             "interval_seconds": self.interval_seconds,
             "tts_enabled": self.tts_enabled,
             "voice_input_enabled": self.voice_input_enabled,
+            "ocr_enabled": self.ocr_enabled,
             "web_search_enabled": self.web_search_enabled,
         }
 
@@ -56,6 +58,8 @@ class RuntimeConfig:
             changes["tts_enabled"] = self.tts_enabled
         if self.voice_input_enabled is not None:
             changes["voice_input_enabled"] = self.voice_input_enabled
+        if self.ocr_enabled is not None:
+            changes["ocr_enabled"] = self.ocr_enabled
         if self.web_search_enabled is not None:
             changes["web_search_enabled"] = self.web_search_enabled
         return replace(settings, **changes) if changes else settings

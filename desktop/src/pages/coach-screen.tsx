@@ -38,6 +38,7 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
 
     const ttsOn = engine.config?.tts_enabled ?? true;
     const voiceOn = engine.config?.voice_input_enabled ?? true;
+    const ocrOn = engine.config?.ocr_enabled ?? true;
     const webOn = engine.config?.web_search_enabled ?? true;
 
     // Refresh usage as cycles accrue cost on the backend.
@@ -171,6 +172,16 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                                 isSelected={voiceOn}
                                 onChange={(v) => engine.updateConfig({ voice_input_enabled: v })}
                             />
+                            <Toggle
+                                size="sm"
+                                label="Screen OCR (local)"
+                                isSelected={ocrOn}
+                                onChange={(v) => engine.updateConfig({ ocr_enabled: v })}
+                            />
+                            <p className="-mt-2 text-xs text-tertiary">
+                                Turn off to skip Tesseract/OpenCV and test whether local OCR is causing lag.
+                                Intervals and vision coaching still run.
+                            </p>
                             <Toggle
                                 size="sm"
                                 label="Web research"

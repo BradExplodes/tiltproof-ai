@@ -1,12 +1,17 @@
 name: Release
 
-# Publishes a Windows installer to GitHub Releases when you push a version tag
-# (e.g. `v0.1.0`). The tag MUST match the version in desktop/package.json.
+# Publishes a Windows installer + latest.yml to GitHub Releases when you push a
+# version tag (e.g. `v0.1.0`). The tag MUST match desktop/package.json.
 on:
     push:
         tags:
             - "v*"
-    workflow_dispatch: {}
+    workflow_dispatch:
+        inputs:
+            tag_name:
+                description: "Tag to publish (e.g. v0.1.3). Only needed for manual runs."
+                required: false
+                type: string
 
 permissions:
     contents: write
@@ -16,6 +21,19 @@ jobs:
         runs-on: windows-latest
         steps:
             - uses: actions/checkout@v4
+
+            - name: Resolve release tag
+              id: tag
+              shell: bash
+              run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag_name }}" ]; then
+                    echo "name=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+                  elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+                    echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "No release tag (push a v* tag or pass tag_name for manual runs)" >&2
+                    exit 1
+                  fi
 
             - name: Set up Python
               uses: actions/setup-python@v5
@@ -37,12 +55,31 @@ jobs:
                   cache: "npm"
                   cache-dependency-path: desktop/package-lock.json
 
-            - name: Build & publish desktop app
+            # Build only — upload via action-gh-release (electron-builder's built-in
+            # publish often exits 0 without creating release assets in CI).
+            - name: Build desktop installer
               working-directory: desktop
-              env:
-                  # Provided automatically by Actions; used by electron-builder to
-                  # create/upload the GitHub Release for this tag.
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   npm ci
-                  npm run publish
+                  npm run dist
+
+            - name: Verify update metadata exists
+              working-directory: desktop
+              shell: bash
+              run: |
+                  ls -la release/
+                  test -f release/latest.yml || (echo "latest.yml missing — auto-update will not work" && exit 1)
+                  test -n "$(ls release/Tiltproof\ AI-Setup-*.exe 2>/dev/null)" || (echo "installer .exe missing" && exit 1)
+
+            - name: Publish to GitHub Releases
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.tag.outputs.name }}
+                  name: ${{ steps.tag.outputs.name }}
+                  files: |
+                      desktop/release/Tiltproof AI-Setup-*.exe
+                      desktop/release/latest.yml
+                      desktop/release/*.blockmap
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

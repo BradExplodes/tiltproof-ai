@@ -128,6 +128,20 @@ function sendUpdateStatus(status: UpdateStatusPayload): void {
     mainWindow?.webContents.send("update:status", status);
 }
 
+/** Missing release assets on GitHub is common before the first CI publish — not a hard error. */
+function normalizeUpdateError(message: string): UpdateStatusPayload {
+    const lower = message.toLowerCase();
+    if (
+        lower.includes("unable to find latest version") ||
+        lower.includes("cannot parse releases feed") ||
+        lower.includes("no published versions")
+    ) {
+        return { state: "none" };
+    }
+    const short = message.length > 140 ? `${message.slice(0, 140)}…` : message;
+    return { state: "error", message: short };
+}
+
 /** Check GitHub Releases; download in background; user installs via in-app banner. */
 function setupAutoUpdate(): void {
     if (DEV_URL) return;
@@ -165,12 +179,12 @@ function setupAutoUpdate(): void {
 
     autoUpdater.on("error", (err) => {
         console.error("[updater]", err);
-        sendUpdateStatus({ state: "error", message: err.message });
+        sendUpdateStatus(normalizeUpdateError(err.message));
     });
 
     void autoUpdater.checkForUpdates().catch((err) => {
         console.error("[updater] check failed", err);
-        sendUpdateStatus({ state: "error", message: String(err) });
+        sendUpdateStatus(normalizeUpdateError(String(err)));
     });
 }
 

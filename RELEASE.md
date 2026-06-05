@@ -108,6 +108,20 @@ publishes against whatever version is in `package.json`).
 To test it: install `v0.1.0`, then release `v0.1.1`. Relaunch the installed app —
 it should fetch and apply the update on the next quit.
 
+### Auto-update says "Unable to find latest version"
+
+Git **tags** alone are not enough — the release must include **`latest.yml`**
+and the **`Tiltproof AI-Setup-<version>.exe`** installer as GitHub Release
+assets. Check https://github.com/BradExplodes/tiltproof-ai/releases — you should
+see downloadable files, not "There aren't any releases here".
+
+If tags exist but releases are empty, re-publish with a fixed workflow:
+
+1. Push the workflow fix to `main`.
+2. GitHub → Actions → **Release** → **Run workflow** → set `tag_name` to e.g.
+   `v0.1.3` (or cut a new tag `v0.1.4`).
+3. Confirm the release page shows the `.exe` and `latest.yml`.
+
 ---
 
 ## Building locally (optional sanity check)

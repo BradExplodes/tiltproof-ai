@@ -60,6 +60,7 @@ export interface RuntimeConfig {
     interval_seconds: number | null;
     tts_enabled: boolean | null;
     voice_input_enabled: boolean | null;
+    ocr_enabled: boolean | null;
     web_search_enabled: boolean | null;
 }
 

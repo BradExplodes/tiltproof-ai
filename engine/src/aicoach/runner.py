@@ -632,7 +632,7 @@ class CoachRunner:
         delay = self._settings.post_speech_delay_seconds
         logger.info(
             "Starting AI coach for '%s' — capture %s, screen=%s, coach=%s, "
-            "screen every %.0fs when idle, %.0fs after coach speech, TTS=%s, web=%s, voice=%s",
+            "screen every %.0fs when idle, %.0fs after coach speech, TTS=%s, web=%s, voice=%s, OCR=%s",
             self._game_id,
             self._capturer.monitor_label(),
             "OCR+vision" if self._coach.ocr_active else self._settings.openai_describe_model,
@@ -642,6 +642,7 @@ class CoachRunner:
             bool(self._tts),
             self._settings.web_search_enabled,
             bool(self._voice),
+            self._coach.ocr_active,
         )
         self._emit(ev.status_event(ev.STATE_STARTING, game_id=self._game_id))
         if self._voice:
