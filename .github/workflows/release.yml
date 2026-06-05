@@ -71,7 +71,7 @@ jobs:
               run: |
                   ls -la release/
                   test -f release/latest.yml || (echo "latest.yml missing — auto-update will not work" && exit 1)
-                  test -n "$(ls release/Tiltproof\ AI-Setup-*.exe 2>/dev/null)" || (echo "installer .exe missing" && exit 1)
+                  test -n "$(ls release/Tiltproof-AI-Setup-*.exe 2>/dev/null)" || (echo "installer .exe missing" && exit 1)
 
             - name: Publish to GitHub Releases
               uses: softprops/action-gh-release@v2
@@ -79,7 +79,7 @@ jobs:
                   tag_name: ${{ steps.tag.outputs.name }}
                   name: ${{ steps.tag.outputs.name }}
                   files: |
-                      desktop/release/Tiltproof AI-Setup-*.exe
+                      desktop/release/Tiltproof-AI-Setup-*.exe
                       desktop/release/latest.yml
                       desktop/release/*.blockmap
                   generate_release_notes: true
