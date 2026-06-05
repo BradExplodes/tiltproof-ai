@@ -1,0 +1,39 @@
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python (engine/) ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+screenshots/
+
+# --- Build artifacts ---
+dist/
+build/
+out/
+dist-electron/
+release/
+*.spec.bak
+
+# --- Node / Electron / Vite (desktop/, landing/) ---
+node_modules/
+*.tsbuildinfo
+.vite/
+
+# --- Cloudflare (backend/) ---
+.wrangler/
+.dev.vars
+
+# --- Private server logic ---
+# The backend (proxy, metering, auth) lives in its OWN private git repo so the
+# proprietary server logic stays closed even though this repo is public.
+/backend/
+
+# --- Misc ---
+*.log
+.DS_Store
+Thumbs.db

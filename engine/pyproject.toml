@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aicoach"
+version = "0.1.0"
+description = "Desktop AI coach for gaming — screenshot analysis via OpenAI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.40.0",
+    "mss>=9.0.2",
+    "Pillow>=10.4.0",
+    "python-dotenv>=1.0.1",
+    "playsound==1.2.2",
+    "sounddevice>=0.5.0",
+    "numpy>=1.26.0",
+    "pytesseract>=0.3.10",
+    "opencv-python-headless>=4.8.0",
+    "winocr>=0.0.14; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+# Local control server consumed by the desktop app (Electron sidecar).
+service = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+]
+
+[project.scripts]
+aicoach = "aicoach.__main__:main"
+aicoach-server = "aicoach.service.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

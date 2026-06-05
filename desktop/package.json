@@ -1,0 +1,99 @@
+{
+    "name": "aicoach-desktop",
+    "version": "0.1.0",
+    "type": "module",
+    "private": true,
+    "description": "AI Coach desktop app",
+    "author": "TiltProof",
+    "main": "dist-electron/main.js",
+    "scripts": {
+        "dev": "concurrently -k -n vite,electron -c blue,green \"vite\" \"npm:dev:electron\"",
+        "dev:electron": "tsc -p electron/tsconfig.json && wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron dist-electron/main.js",
+        "build:renderer": "tsc -b && vite build",
+        "build:electron": "tsc -p electron/tsconfig.json",
+        "build": "npm run build:renderer && npm run build:electron",
+        "dist": "npm run build && electron-builder",
+        "publish": "npm run build && electron-builder --win --publish always",
+        "preview": "vite preview"
+    },
+    "build": {
+        "appId": "net.tiltproof.aicoach",
+        "productName": "AI Coach",
+        "directories": {
+            "output": "release",
+            "buildResources": "build"
+        },
+        "files": [
+            "dist/**/*",
+            "dist-electron/**/*"
+        ],
+        "extraResources": [
+            {
+                "from": "../engine/dist/aicoach-server",
+                "to": "engine"
+            }
+        ],
+        "win": {
+            "target": [
+                "nsis"
+            ],
+            "artifactName": "${productName}-Setup-${version}.${ext}"
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "deleteAppDataOnUninstall": false
+        },
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "bradexplodes",
+                "repo": "tiltproof-ai"
+            }
+        ]
+    },
+    "dependencies": {
+        "@react-aria/utils": "^3.34.1",
+        "@react-stately/utils": "^3.12.1",
+        "@react-types/overlays": "^3.10.0",
+        "@tailwindcss/typography": "^0.5.19",
+        "@tailwindcss/vite": "^4.2.2",
+        "@untitledui/file-icons": "^0.0.9",
+        "@untitledui/icons": "^0.0.22",
+        "electron-updater": "^6.8.3",
+        "embla-carousel-react": "^8.6.0",
+        "input-otp": "^1.4.2",
+        "motion": "^12.38.0",
+        "qr-code-styling": "^1.9.2",
+        "react": "^19.2.4",
+        "react-aria": "^3.47.0",
+        "react-aria-components": "^1.16.0",
+        "react-dom": "^19.2.4",
+        "react-hotkeys-hook": "^5.2.4",
+        "react-router": "^7.13.0",
+        "recharts": "^3.8.0",
+        "tailwind-merge": "^3.5.0",
+        "tailwindcss": "^4.2.2",
+        "tailwindcss-animate": "^1.0.7",
+        "tailwindcss-react-aria-components": "^2.0.1"
+    },
+    "devDependencies": {
+        "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+        "@types/node": "^25.5.0",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.1",
+        "concurrently": "^10.0.3",
+        "cross-env": "^10.1.0",
+        "electron": "^42.3.3",
+        "electron-builder": "^26.8.1",
+        "globals": "^16.5.0",
+        "prettier": "^3.8.1",
+        "prettier-plugin-tailwindcss": "^0.7.2",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.53.1",
+        "vite": "^8.0.2",
+        "wait-on": "^9.0.10"
+    }
+}

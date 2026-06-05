@@ -1,0 +1,48 @@
+name: Release
+
+# Publishes a Windows installer to GitHub Releases when you push a version tag
+# (e.g. `v0.1.0`). The tag MUST match the version in desktop/package.json.
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch: {}
+
+permissions:
+    contents: write
+
+jobs:
+    windows:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Build engine sidecar (PyInstaller)
+              working-directory: engine
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -e ".[service]"
+                  pip install pyinstaller
+                  pyinstaller aicoach-server.spec --noconfirm --clean
+
+            - name: Set up Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: desktop/package-lock.json
+
+            - name: Build & publish desktop app
+              working-directory: desktop
+              env:
+                  # Provided automatically by Actions; used by electron-builder to
+                  # create/upload the GitHub Release for this tag.
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  npm ci
+                  npm run publish
