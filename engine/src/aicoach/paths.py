@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -17,10 +18,19 @@ def bundle_dir() -> Path:
     return _PKG_DIR.parent.parent
 
 
+def _frozen_data_dir() -> Path:
+    """Writable per-user data dir (install dir under Program Files is read-only)."""
+    override = os.getenv("AICOACH_DATA_DIR", "").strip()
+    if override:
+        return Path(override)
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or str(Path.home())
+    return Path(base) / "Tiltproof AI" / "engine"
+
+
 def app_dir() -> Path:
-    """Directory for .env, screenshots, and other writable/local files."""
+    """Directory for .env, screenshots, logs, and other writable/local files."""
     if is_frozen():
-        return Path(sys.executable).resolve().parent
+        return _frozen_data_dir()
     return _PKG_DIR.parent.parent
 
 

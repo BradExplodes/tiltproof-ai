@@ -35,6 +35,7 @@ function startEngine(): void {
     // but cannot run a coaching session.
     const session = loadSession();
     const env: NodeJS.ProcessEnv = { ...process.env };
+    env.AICOACH_DATA_DIR = path.join(app.getPath("userData"), "engine");
     env.OCR_SAVE_SCREENSHOTS = "false";
     env.VOICE_REALTIME_ENABLED = "false";
     env.PERF_LOG = "1";

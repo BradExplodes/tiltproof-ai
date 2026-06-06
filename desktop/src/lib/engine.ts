@@ -97,6 +97,8 @@ type ControlMessage =
 
 const MAX_FEED = 200;
 const RECONNECT_MS = 1500;
+const HEALTH_POLL_MS = 400;
+const HEALTH_TIMEOUT_MS = 30_000;
 
 const newId = () =>
     typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -179,7 +181,10 @@ export function useEngine(): EngineApi {
         const connect = (wsUrl: string) => {
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
-            ws.onopen = () => setSnap((prev) => ({ ...prev, connected: true, error: null }));
+            ws.onopen = () => {
+                setSnap((prev) => ({ ...prev, connected: true, error: null }));
+                if (httpUrl) void bootstrapLists(httpUrl);
+            };
             ws.onmessage = (msg) => {
                 try {
                     apply(JSON.parse(msg.data as string));
@@ -196,20 +201,46 @@ export function useEngine(): EngineApi {
             ws.onerror = () => ws.close();
         };
 
+        const waitForHealth = async (baseUrl: string): Promise<boolean> => {
+            const deadline = Date.now() + HEALTH_TIMEOUT_MS;
+            while (Date.now() < deadline && !closedRef.current) {
+                try {
+                    const res = await fetch(`${baseUrl}/health`);
+                    if (res.ok) return true;
+                } catch {
+                    /* engine still booting */
+                }
+                await new Promise((r) => setTimeout(r, HEALTH_POLL_MS));
+            }
+            return false;
+        };
+
+        const bootstrapLists = async (baseUrl: string) => {
+            try {
+                const [g, m] = await Promise.all([
+                    fetch(`${baseUrl}/games`).then((r) => r.json()),
+                    fetch(`${baseUrl}/monitors`).then((r) => r.json()),
+                ]);
+                setSnap((prev) => ({ ...prev, games: g.games ?? [], monitors: m.monitors ?? [] }));
+            } catch {
+                /* lists refresh on reconnect */
+            }
+        };
+
         window.aicoach
             .getEngineInfo()
             .then(async (info) => {
                 httpUrl = info.httpUrl;
-                // Bootstrap static lists (best-effort).
-                try {
-                    const [g, m] = await Promise.all([
-                        fetch(`${httpUrl}/games`).then((r) => r.json()),
-                        fetch(`${httpUrl}/monitors`).then((r) => r.json()),
-                    ]);
-                    setSnap((prev) => ({ ...prev, games: g.games ?? [], monitors: m.monitors ?? [] }));
-                } catch {
-                    /* engine may still be starting; lists arrive on retry */
+                const ready = await waitForHealth(httpUrl);
+                if (closedRef.current) return;
+                if (!ready) {
+                    setSnap((prev) => ({
+                        ...prev,
+                        error: "Engine failed to start. Try restarting the app.",
+                    }));
+                    return;
                 }
+                await bootstrapLists(httpUrl);
                 connect(info.wsUrl);
             })
             .catch(() => setSnap((prev) => ({ ...prev, error: "Engine bridge unavailable" })));

@@ -38,12 +38,20 @@ def log_file_path() -> Path:
 
 def configure_file_logging() -> None:
     """Attach a rotating-friendly file handler once (desktop sidecar diagnostics)."""
-    path = log_file_path()
+    try:
+        path = log_file_path()
+    except OSError as exc:
+        logger.warning("Engine file logging disabled: %s", exc)
+        return
     root = logging.getLogger()
     for handler in root.handlers:
         if getattr(handler, "baseFilename", None) == str(path):
             return
-    handler = logging.FileHandler(path, encoding="utf-8")
+    try:
+        handler = logging.FileHandler(path, encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Engine file logging disabled: %s", exc)
+        return
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     )
