@@ -16,6 +16,7 @@ from aicoach.screen_ocr import (
     recognize_screenshot,
 )
 from aicoach.scene_classify import reconcile_screen_observation
+from aicoach.console import safe_print
 from aicoach.vision_describe import ScreenDescriber
 from aicoach.voice.screen_intent import (
     needs_visual_reasoning,
@@ -28,11 +29,11 @@ logger = logging.getLogger(__name__)
 
 def _print_ocr_preview(observation: ScreenObservation, *, note: str = "") -> None:
     """Show Tesseract output in the console even when vision is used for the reply."""
-    print("--- OCR output (not used for reply) ---", flush=True)
+    safe_print("--- OCR output (not used for reply) ---", flush=True)
     if note:
-        print(f"({note})", flush=True)
-    print(observation.description, flush=True)
-    print("---", flush=True)
+        safe_print(f"({note})", flush=True)
+    safe_print(observation.description, flush=True)
+    safe_print("---", flush=True)
 
 
 class ScreenReader:
@@ -98,8 +99,10 @@ class ScreenReader:
     def ocr_active(self) -> bool:
         return self._ocr_enabled
 
-    def _quick_ocr_params(self) -> tuple[float, str, bool, int]:
+    def _quick_ocr_params(self, scene_hint: str = "") -> tuple[float, str, bool, int]:
         """Lightweight params for idle drift probes (minimize CPU during gameplay)."""
+        if scene_hint == "gameplay":
+            return 1.0, "none", False, 640
         return 1.25, "game_fast", False, 960
 
     def _voice_ocr_params(self) -> tuple[float, str, bool, int]:
@@ -111,9 +114,11 @@ class ScreenReader:
         multi = False if self._ocr_voice_fast else self._ocr_multi_psm
         return scale, preprocess, multi, self._ocr_max_width
 
-    def run_quick_ocr(self, screenshot: Screenshot) -> tuple[str, float]:
+    def run_quick_ocr(
+        self, screenshot: Screenshot, *, scene_hint: str = ""
+    ) -> tuple[str, float]:
         """Fast OCR pass for drift detection (not a full screen read)."""
-        scale, preprocess, multi, max_width = self._quick_ocr_params()
+        scale, preprocess, multi, max_width = self._quick_ocr_params(scene_hint)
         return recognize_screenshot(
             screenshot,
             self._ocr_lang,
@@ -143,7 +148,7 @@ class ScreenReader:
             self._pending_probe_ocr_text = ""
             return True, "OCR disabled — interval refresh (no local OCR)"
         try:
-            ocr_text, elapsed = self.run_quick_ocr(screenshot)
+            ocr_text, elapsed = self.run_quick_ocr(screenshot, scene_hint=scene_hint)
             self._pending_probe_ocr_text = ocr_text
             changed, reason = ocr_substantially_changed(
                 self._baseline_ocr_text,
@@ -232,7 +237,7 @@ class ScreenReader:
             )
         else:
             logger.info("Voice screen read: using Tesseract OCR")
-        print("(reading screen with OCR…)", flush=True)
+        safe_print("(reading screen with OCR…)", flush=True)
 
         ocr_preview = ""
         ocr_text = ""
@@ -253,7 +258,7 @@ class ScreenReader:
                             self._ocr_save_dir, tag="read"
                         )
                         logger.info("OCR input frame saved (prefetch): %s", saved)
-                        print(f"(OCR screenshot saved — {saved.name})", flush=True)
+                        safe_print(f"(OCR screenshot saved — {saved.name})", flush=True)
                     except Exception:
                         logger.debug("Could not save OCR capture", exc_info=True)
             else:
@@ -303,7 +308,7 @@ class ScreenReader:
                     "OCR not sufficient for voice question (%s) — vision fallback",
                     reason,
                 )
-                print(
+                safe_print(
                     f"(OCR not enough for this question — using vision: {reason})",
                     flush=True,
                 )
@@ -312,17 +317,17 @@ class ScreenReader:
                 method = "ocr+vision"
             else:
                 logger.info("OCR text too sparse — falling back to vision")
-                print("(OCR found little text — using vision instead)", flush=True)
+                safe_print("(OCR found little text — using vision instead)", flush=True)
                 _print_ocr_preview(observation, note="too little text")
                 ocr_preview = observation.description
                 method = "ocr+vision"
         except Exception:
             logger.exception("OCR failed — falling back to vision")
-            print("(OCR failed — using vision instead)", flush=True)
+            safe_print("(OCR failed — using vision instead)", flush=True)
             ocr_preview = ""
             method = "ocr+vision"
 
-        print("(reading screen with vision…)", flush=True)
+        safe_print("(reading screen with vision…)", flush=True)
         observation, usage = self._describer.describe(
             screenshot, game_id, focus=transcript
         )

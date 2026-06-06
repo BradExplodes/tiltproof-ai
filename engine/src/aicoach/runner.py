@@ -23,6 +23,7 @@ from aicoach.voice import (
     voice_should_use_vision_read,
     voice_wants_fresh_screen_read,
 )
+from aicoach.console import safe_print
 from aicoach.perf import CaptureBreakdown, apply_low_priority, perf_event
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,7 @@ class CoachRunner:
     def _voice_turn_cancelled(self) -> bool:
         """Another utterance finished while this turn was still running."""
         if self._voice and self._voice.pending_count() > 0:
-            print(
+            safe_print(
                 "(newer speech detected — cancelling this reply)",
                 flush=True,
             )
@@ -201,7 +202,7 @@ class CoachRunner:
             latest = newer
             dropped += 1
         if dropped:
-            print(
+            safe_print(
                 f"(dropped {dropped} older queued clip(s) — processing latest speech only)",
                 flush=True,
             )
@@ -209,14 +210,14 @@ class CoachRunner:
 
     def _print_timings(self, advice: CoachAdvice) -> None:
         for line in advice.timings.format_lines():
-            print(line)
+            safe_print(line)
 
     def _print_screen_observation(self, advice: CoachAdvice) -> None:
         ocr_preview = advice.ocr_preview or advice.timings.ocr_preview
         if ocr_preview:
-            print("--- OCR output (not used for reply) ---")
-            print(ocr_preview)
-            print("---")
+            safe_print("--- OCR output (not used for reply) ---")
+            safe_print(ocr_preview)
+            safe_print("---")
         if not advice.screen_description:
             return
         method = advice.timings.screen_read_method
@@ -226,9 +227,9 @@ class CoachRunner:
             label = "Vision (used for reply)"
         else:
             label = "vision"
-        print(f"--- Screen observation ({label}) ---")
-        print(advice.screen_description)
-        print("---")
+        safe_print(f"--- Screen observation ({label}) ---")
+        safe_print(advice.screen_description)
+        safe_print("---")
 
     def _default_on_advice(self, advice: CoachAdvice, screenshot: Screenshot) -> None:
         vision_usd = advice.usage.estimated_usd if advice.usage else 0.0
@@ -239,19 +240,19 @@ class CoachRunner:
 
         divider = "=" * 60
         label = "Voice" if advice.trigger == "voice" else "Screen"
-        print(f"\n{divider}")
-        print(f"[{screenshot.captured_at.isoformat()}] Coach ({advice.game_id}) — {label}")
+        safe_print(f"\n{divider}")
+        safe_print(f"[{screenshot.captured_at.isoformat()}] Coach ({advice.game_id}) — {label}")
         if advice.scene:
-            print(f"Screen: {advice.scene}")
+            safe_print(f"Screen: {advice.scene}")
         self._print_screen_observation(advice)
         if advice.map_intel_notes:
-            print("--- Map intel (hard sections) ---")
+            safe_print("--- Map intel (hard sections) ---")
             if advice.map_intel_name:
-                print(advice.map_intel_name)
-            print(advice.map_intel_notes)
-            print("---")
+                safe_print(advice.map_intel_name)
+            safe_print(advice.map_intel_notes)
+            safe_print("---")
         if advice.web:
-            print("(web search used this cycle)")
+            safe_print("(web search used this cycle)")
         if advice.usage or advice.web or advice.tts:
             parts = []
             if advice.describe_usage and advice.response_usage:
@@ -276,14 +277,14 @@ class CoachRunner:
                     f"({advice.tts.characters} chars, "
                     f"{advice.tts.playback_seconds:.1f}s)"
                 )
-            print(" | ".join(parts))
-            print(
+            safe_print(" | ".join(parts))
+            safe_print(
                 f"Cycle total: ~${vision_usd + web_usd + tts_usd:.4f} | "
                 f"Session: ~${self._session_cost_usd:.4f} ({self._call_count} cycles)"
             )
-        print(divider)
-        print(advice.text)
-        print(divider, flush=True)
+        safe_print(divider)
+        safe_print(advice.text)
+        safe_print(divider, flush=True)
 
     def stop(self) -> None:
         self._running = False
@@ -367,7 +368,7 @@ class CoachRunner:
             advice.timings.tts_play_s = tts_result.play_seconds
             self._session_cost_usd += tts_result.estimated_usd
             status = "interrupted" if tts_result.interrupted else "done"
-            print(
+            safe_print(
                 f"TTS ({status}): ~${tts_result.estimated_usd:.4f} "
                 f"({tts_result.characters} chars, "
                 f"{tts_result.play_seconds:.1f}s playback)",
@@ -438,7 +439,7 @@ class CoachRunner:
                     changed = True
                     drift_reason = cache_reason
             if not changed:
-                print(
+                safe_print(
                     f"(idle screen check — unchanged: {drift_reason}, skipping vision)",
                     flush=True,
                 )
@@ -507,27 +508,27 @@ class CoachRunner:
                 self._session_cost_usd += advice.usage.estimated_usd
             self._call_count += 1
             divider = "=" * 60
-            print(f"\n{divider}")
-            print(f"[{screenshot.captured_at.isoformat()}] Coach ({advice.game_id}) — Screen")
+            safe_print(f"\n{divider}")
+            safe_print(f"[{screenshot.captured_at.isoformat()}] Coach ({advice.game_id}) — Screen")
             if advice.scene:
-                print(f"Screen: {advice.scene}")
+                safe_print(f"Screen: {advice.scene}")
             self._print_screen_observation(advice)
             if advice.map_intel_notes:
-                print("--- Map intel (hard sections) ---")
+                safe_print("--- Map intel (hard sections) ---")
                 if advice.map_intel_name:
-                    print(advice.map_intel_name)
-                print(advice.map_intel_notes)
-                print("---")
-            print("(nothing new to say — no TTS)")
+                    safe_print(advice.map_intel_name)
+                safe_print(advice.map_intel_notes)
+                safe_print("---")
+            safe_print("(nothing new to say — no TTS)")
             if advice.usage:
-                print(
+                safe_print(
                     f"API ~${advice.usage.estimated_usd:.4f} "
                     f"({advice.usage.prompt_tokens} in / "
                     f"{advice.usage.completion_tokens} out)"
                 )
             advice.timings.cycle_total_s = time.monotonic() - cycle_start
             self._print_timings(advice)
-            print(divider, flush=True)
+            safe_print(divider, flush=True)
             self._emit(ev.advice_event(advice, screenshot))
             self._emit_cost(advice)
             self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
@@ -558,7 +559,7 @@ class CoachRunner:
         cycle_start: float,
         timings: CycleTimings,
     ) -> None:
-        print("(processing your speech…)", flush=True)
+        safe_print("(processing your speech…)", flush=True)
         logger.info("Voice utterance ended — transcribing")
         self._set_mic_active(False)
         self._emit(ev.status_event(ev.STATE_TRANSCRIBING, game_id=self._game_id))
@@ -590,7 +591,7 @@ class CoachRunner:
         self._session_cost_usd += stt_usd
 
         if len(transcript) < 2:
-            print(
+            safe_print(
                 "(voice ignored — transcription empty or noise; "
                 "try speaking louder or longer)",
                 flush=True,
@@ -598,11 +599,11 @@ class CoachRunner:
             logger.info("Ignored empty/noise transcription")
             return
 
-        print(
+        safe_print(
             f'You said: "{transcript}"',
             flush=True,
         )
-        print(
+        safe_print(
             f"STT: ~${stt_usd:.4f} ({stt_s:.1f}s API) — starting coach",
             flush=True,
         )
@@ -653,11 +654,11 @@ class CoachRunner:
         )
 
         if refresh_read:
-            print(f"(screenshot + read — {reason})", flush=True)
+            safe_print(f"(screenshot + read — {reason})", flush=True)
         elif screen_ocr_verified:
-            print(f"(screenshot — {reason})", flush=True)
+            safe_print(f"(screenshot — {reason})", flush=True)
         else:
-            print(f"(screenshot — {reason})", flush=True)
+            safe_print(f"(screenshot — {reason})", flush=True)
 
         if self._voice_turn_cancelled():
             return
@@ -793,7 +794,7 @@ class CoachRunner:
 
 def install_signal_handlers(runner: CoachRunner) -> None:
     def _handle_signal(_signum: int, _frame: object) -> None:
-        print("\nStopping AI coach...", flush=True)
+        safe_print("\nStopping AI coach...", flush=True)
         runner.stop()
 
     signal.signal(signal.SIGINT, _handle_signal)

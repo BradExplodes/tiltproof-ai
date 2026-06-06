@@ -36,6 +36,8 @@ function startEngine(): void {
     const session = loadSession();
     const env: NodeJS.ProcessEnv = { ...process.env };
     env.AICOACH_DATA_DIR = path.join(app.getPath("userData"), "engine");
+    env.PYTHONUTF8 = "1";
+    env.PYTHONIOENCODING = "utf-8";
     env.OCR_SAVE_SCREENSHOTS = "false";
     env.VOICE_REALTIME_ENABLED = "false";
     env.PERF_LOG = "1";
