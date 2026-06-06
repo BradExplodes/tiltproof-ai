@@ -232,7 +232,7 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                         <h2 className="text-sm font-semibold text-secondary">Coach feed</h2>
                         {activity && (
                             <span className="flex items-center gap-1.5 text-xs font-medium text-tertiary">
-                                <span className="size-1.5 animate-pulse rounded-full bg-brand-solid" />
+                                <span className="size-1.5 rounded-full bg-brand-solid" />
                                 {activity}
                             </span>
                         )}
@@ -275,7 +275,7 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                         )}
                         {activity && (
                             <div className="flex items-center gap-2 self-start rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-tertiary">
-                                <span className="size-1.5 animate-pulse rounded-full bg-brand-solid" />
+                                <span className="size-1.5 rounded-full bg-brand-solid" />
                                 {activity}
                             </div>
                         )}
