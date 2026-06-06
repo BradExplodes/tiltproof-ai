@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import logging
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -11,6 +13,35 @@ import mss
 from PIL import Image
 
 from aicoach.perf import CaptureBreakdown
+
+logger = logging.getLogger(__name__)
+
+_PROBE_MAX_WIDTH = 720
+_PROBE_JPEG_QUALITY = 70
+
+
+def _dxcam_importable() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        import dxcam  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _select_backend() -> str:
+    """Default mss (short GDI spike). Set AICOACH_CAPTURE_BACKEND=dxcam to opt in."""
+    choice = os.getenv("AICOACH_CAPTURE_BACKEND", "mss").strip().lower()
+    if choice == "dxcam" and _dxcam_importable():
+        return "dxcam"
+    return "mss"
+
+
+def _mss_to_dxcam_output(monitor_index: int) -> int:
+    """mss index 1 = primary; dxcam output_idx 0 = primary."""
+    return max(0, monitor_index - 1)
 
 
 @dataclass(frozen=True)
@@ -45,8 +76,6 @@ class Screenshot:
         if self.mime_type == "image/png":
             path.write_bytes(self.png_bytes)
             return path
-        from PIL import Image
-        import io
 
         img = Image.open(io.BytesIO(self.png_bytes))
         img.save(path, format="PNG", optimize=True)
@@ -79,12 +108,57 @@ def list_monitors() -> list[dict[str, int | str]]:
         return result
 
 
-_PROBE_MAX_WIDTH = 720
-_PROBE_JPEG_QUALITY = 70
+def _encode_frame(
+    img: Image.Image,
+    *,
+    full_quality: bool,
+    probe: bool,
+    default_max_width: int,
+    default_jpeg_quality: int,
+    breakdown: CaptureBreakdown | None,
+    grab_s: float,
+    encode_started: float | None = None,
+) -> tuple[bytes, str, Image.Image]:
+    if full_quality:
+        max_width = 0
+        jpeg_quality = 0
+        resample = Image.Resampling.LANCZOS
+    elif probe:
+        max_width = _PROBE_MAX_WIDTH
+        jpeg_quality = _PROBE_JPEG_QUALITY
+        resample = Image.Resampling.BILINEAR
+    else:
+        max_width = default_max_width
+        jpeg_quality = default_jpeg_quality
+        resample = Image.Resampling.LANCZOS
+
+    if max_width and img.width > max_width:
+        ratio = max_width / img.width
+        new_size = (max_width, int(img.height * ratio))
+        img = img.resize(new_size, resample)
+
+    started = encode_started if encode_started is not None else time.monotonic()
+    buffer = io.BytesIO()
+    if jpeg_quality > 0:
+        img.save(buffer, format="JPEG", quality=jpeg_quality, optimize=not probe)
+        mime = "image/jpeg"
+    else:
+        img.save(buffer, format="PNG", optimize=True)
+        mime = "image/png"
+
+    if breakdown is not None:
+        breakdown.encode_s = time.monotonic() - started
+    return buffer.getvalue(), mime, img
 
 
 class ScreenCapturer:
-    """Captures one monitor (default: primary) as PNG bytes."""
+    """
+    Captures one monitor as PNG/JPEG bytes.
+
+    On Windows prefers DXGI Desktop Duplication (dxcam) over mss BitBlt so
+    fullscreen games are not left in a degraded compositor state for the rest
+    of the coaching cycle.
+    """
 
     def __init__(
         self,
@@ -95,7 +169,25 @@ class ScreenCapturer:
         self._monitor_index = monitor_index
         self._max_width = max_width
         self._jpeg_quality = jpeg_quality
-        self._sct = mss.mss()
+        self._backend = _select_backend()
+        if self._backend == "mss":
+            logger.info(
+                "Screen capture backend: mss (short-lived GDI grab per frame)"
+            )
+        else:
+            logger.info(
+                "Screen capture backend: dxcam (monitor index %s -> output %s)",
+                monitor_index,
+                _mss_to_dxcam_output(monitor_index),
+            )
+
+    @property
+    def backend(self) -> str:
+        return self._backend
+
+    @property
+    def last_grab_backend(self) -> str:
+        return getattr(self, "_last_grab_backend", self._backend)
 
     @property
     def monitor_index(self) -> int:
@@ -106,12 +198,55 @@ class ScreenCapturer:
             if mon["index"] == self._monitor_index:
                 return (
                     f"index {self._monitor_index} ({mon['label']}, "
-                    f"{mon['width']}x{mon['height']})"
+                    f"{mon['width']}x{mon['height']}, {self._backend})"
                 )
-        return f"index {self._monitor_index}"
+        return f"index {self._monitor_index} ({self._backend})"
 
     def close(self) -> None:
-        self._sct.close()
+        return
+
+    def _grab_dxcam(self) -> Image.Image:
+        import dxcam
+        import numpy as np
+
+        output_idx = _mss_to_dxcam_output(self._monitor_index)
+        camera = dxcam.create(output_idx=output_idx, output_color="BGR")
+        try:
+            if getattr(camera, "is_capturing", False):
+                camera.stop()
+            frame = camera.grab()
+            if frame is None:
+                time.sleep(0.01)
+                frame = camera.grab()
+            if frame is None:
+                raise RuntimeError("DXGI capture returned no frame")
+            if not isinstance(frame, np.ndarray):
+                raise RuntimeError(f"Unexpected DXGI frame type: {type(frame)!r}")
+            rgb = frame[:, :, ::-1]
+            return Image.fromarray(rgb.copy())
+        finally:
+            # Tear down capture mode; drop refs so DXGI duplication can unwind.
+            # (camera.release() crashes on some comtypes builds — avoid it.)
+            try:
+                if getattr(camera, "is_capturing", False):
+                    camera.stop()
+            except Exception:
+                logger.debug("dxcam stop failed", exc_info=True)
+            del camera
+
+    def _grab_mss(self) -> tuple[Image.Image, float]:
+        grab_started = time.monotonic()
+        with mss.mss() as sct:
+            monitors = sct.monitors
+            if self._monitor_index >= len(monitors):
+                raise ValueError(
+                    f"Monitor index {self._monitor_index} not found. "
+                    f"Available: 0-{len(monitors) - 1}"
+                )
+            raw = sct.grab(monitors[self._monitor_index])
+        grab_s = time.monotonic() - grab_started
+        img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
+        return img, grab_s
 
     def capture(
         self,
@@ -125,62 +260,42 @@ class ScreenCapturer:
 
         full_quality: native resolution PNG (for OCR).
         probe: smaller/faster frame for OCR drift checks before a full vision capture.
-        breakdown: optional timing split (mss grab vs PIL encode) for perf diagnosis.
+        breakdown: optional timing split (grab vs encode) for perf diagnosis.
         """
-        monitors = self._sct.monitors
-        if self._monitor_index >= len(monitors):
-            raise ValueError(
-                f"Monitor index {self._monitor_index} not found. "
-                f"Available: 0-{len(monitors) - 1}"
-            )
-
         grab_started = time.monotonic()
-        raw = self._sct.grab(monitors[self._monitor_index])
-        grab_s = time.monotonic() - grab_started
-        # Let the compositor/game recover one frame after BitBlt capture.
-        if sys.platform == "win32" and not probe:
-            time.sleep(0.016)
-
-        encode_started = time.monotonic()
-        img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
-        if full_quality:
-            max_width = 0
-            jpeg_quality = 0
-            resample = Image.Resampling.LANCZOS
-        elif probe:
-            max_width = _PROBE_MAX_WIDTH
-            jpeg_quality = _PROBE_JPEG_QUALITY
-            resample = Image.Resampling.BILINEAR
+        used_backend = self._backend
+        if self._backend == "dxcam":
+            try:
+                img = self._grab_dxcam()
+                grab_s = time.monotonic() - grab_started
+            except Exception:
+                logger.warning("DXGI capture failed; using mss for this frame", exc_info=True)
+                img, _ = self._grab_mss()
+                grab_s = time.monotonic() - grab_started
+                used_backend = "mss"
         else:
-            max_width = self._max_width
-            jpeg_quality = self._jpeg_quality
-            resample = Image.Resampling.LANCZOS
+            img, grab_s = self._grab_mss()
+            if not probe:
+                time.sleep(0.016)
 
-        if max_width and img.width > max_width:
-            ratio = max_width / img.width
-            new_size = (max_width, int(img.height * ratio))
-            img = img.resize(new_size, resample)
-
-        buffer = io.BytesIO()
-        if jpeg_quality > 0:
-            img.save(
-                buffer,
-                format="JPEG",
-                quality=jpeg_quality,
-                optimize=not probe,
-            )
-            mime = "image/jpeg"
-        else:
-            img.save(buffer, format="PNG", optimize=True)
-            mime = "image/png"
-
-        encode_s = time.monotonic() - encode_started
         if breakdown is not None:
             breakdown.grab_s = grab_s
-            breakdown.encode_s = encode_s
+        self._last_grab_backend = used_backend
+
+        encode_started = time.monotonic()
+        png_bytes, mime, img = _encode_frame(
+            img,
+            full_quality=full_quality,
+            probe=probe,
+            default_max_width=self._max_width,
+            default_jpeg_quality=self._jpeg_quality,
+            breakdown=breakdown,
+            grab_s=grab_s,
+            encode_started=encode_started,
+        )
 
         return Screenshot(
-            png_bytes=buffer.getvalue(),
+            png_bytes=png_bytes,
             captured_at=datetime.now(timezone.utc),
             monitor_index=self._monitor_index,
             width=img.width,

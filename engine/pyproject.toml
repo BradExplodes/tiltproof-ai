@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "openai>=1.40.0",
     "mss>=9.0.2",
+    "dxcam>=0.0.5; platform_system == 'Windows'",
     "Pillow>=10.4.0",
     "python-dotenv>=1.0.1",
     "playsound==1.2.2",

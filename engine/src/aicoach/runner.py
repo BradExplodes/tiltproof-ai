@@ -397,16 +397,25 @@ class CoachRunner:
 
     def _run_screen_cycle(self) -> None:
         cycle_start = time.monotonic()
-        timings = CycleTimings()
         self._set_mic_active(False)
         try:
-            self._run_screen_cycle_inner(cycle_start, timings)
+            deferred = self._run_screen_cycle_inner(cycle_start)
+            if deferred is None:
+                return
+            advice, _screenshot = deferred
+            if not self._tts or not advice.text:
+                self._emit_cost(advice)
+                return
+            advice = self._speak_advice(advice, cycle_start, mic_during_tts=False)
+            self._print_timings(advice)
+            self._emit_cost(advice)
         finally:
             self._set_mic_active(True)
 
     def _run_screen_cycle_inner(
-        self, cycle_start: float, timings: CycleTimings
-    ) -> None:
+        self, cycle_start: float
+    ) -> tuple[CoachAdvice, Screenshot] | None:
+        timings = CycleTimings()
         apply_low_priority()
         self._emit(ev.status_event(ev.STATE_CAPTURING, game_id=self._game_id))
         screenshot: Screenshot | None = None
@@ -422,6 +431,7 @@ class CoachRunner:
                 duration_ms=probe_ms,
                 grab_ms=round(probe_bd.grab_s * 1000, 1),
                 encode_ms=round(probe_bd.encode_s * 1000, 1),
+                backend=self._capturer.last_grab_backend,
                 w=probe_shot.width,
                 h=probe_shot.height,
             )
@@ -450,7 +460,7 @@ class CoachRunner:
                         game_id=self._game_id,
                     )
                 )
-                return
+                return None
             full_bd = CaptureBreakdown()
             capture_started = time.monotonic()
             screenshot = self._capturer.capture(breakdown=full_bd)
@@ -461,6 +471,7 @@ class CoachRunner:
                 duration_ms=timings.capture_s * 1000,
                 grab_ms=round(full_bd.grab_s * 1000, 1),
                 encode_ms=round(full_bd.encode_s * 1000, 1),
+                backend=self._capturer.last_grab_backend,
                 w=screenshot.width,
                 h=screenshot.height,
                 kb=round(screenshot.size_kb),
@@ -476,6 +487,7 @@ class CoachRunner:
                 duration_ms=timings.capture_s * 1000,
                 grab_ms=round(full_bd.grab_s * 1000, 1),
                 encode_ms=round(full_bd.encode_s * 1000, 1),
+                backend=self._capturer.last_grab_backend,
                 w=screenshot.width,
                 h=screenshot.height,
                 kb=round(screenshot.size_kb),
@@ -532,15 +544,12 @@ class CoachRunner:
             self._emit(ev.advice_event(advice, screenshot))
             self._emit_cost(advice)
             self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
-            return
+            return None
 
         self._on_advice(advice, screenshot)
         self._emit(ev.advice_event(advice, screenshot))
-        advice = self._speak_advice(advice, cycle_start, mic_during_tts=False)
-        self._print_timings(advice)
-        self._emit_cost(advice)
-        if advice.tts is None or advice.tts.interrupted:
-            self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
+        self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
+        return advice, screenshot
 
     def _run_voice_turn(self, utterance: MicUtterance) -> None:
         cycle_start = time.monotonic()

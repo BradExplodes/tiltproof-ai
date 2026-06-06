@@ -184,6 +184,7 @@ export const CoachScreen = ({ auth }: { auth: AuthApi }) => {
                             {engine.lastPerf && (
                                 <p className="font-mono text-xs text-tertiary">
                                     Perf: {engine.lastPerf.phase} {engine.lastPerf.duration_ms}ms
+                                    {engine.lastPerf.backend != null ? ` [${String(engine.lastPerf.backend)}]` : ""}
                                     {engine.lastPerf.grab_ms != null
                                         ? ` (grab ${engine.lastPerf.grab_ms}ms encode ${engine.lastPerf.encode_ms}ms)`
                                         : ""}

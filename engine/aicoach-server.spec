@@ -33,6 +33,8 @@ hidden = (
         "PIL",
         "PIL.Image",
         "mss",
+        "dxcam",
+        "comtypes",
         "dotenv",
     ]
 )
