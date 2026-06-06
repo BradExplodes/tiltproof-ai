@@ -119,6 +119,15 @@ def ocr_substantially_changed(
     if prev_map and curr_map and prev_map != curr_map:
         return True, "map/song fingerprint changed"
 
+    prev_type = infer_screen_type_from_text(previous, game_id)
+    curr_type = infer_screen_type_from_text(current, game_id)
+    in_menu = scene_hint in ("menu", "map_select", "lobby") or (
+        prev_type in ("menu", "map_select", "lobby")
+        and curr_type in ("menu", "map_select", "lobby")
+    )
+    if in_menu and prev_map and curr_map and prev_map == curr_map:
+        return False, "menu/map_select preview animation ignored (same song)"
+
     if prev_norm == curr_norm:
         return False, "OCR text unchanged"
     similarity = ocr_similarity(previous, current)

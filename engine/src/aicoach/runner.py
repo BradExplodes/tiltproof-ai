@@ -320,14 +320,20 @@ class CoachRunner:
             return True
         return False
 
-    def _speak_advice(self, advice: CoachAdvice, cycle_start: float) -> CoachAdvice:
+    def _speak_advice(
+        self,
+        advice: CoachAdvice,
+        cycle_start: float,
+        *,
+        mic_during_tts: bool = True,
+    ) -> CoachAdvice:
         if not self._tts or advice.skip or not advice.text:
             return advice
         if self._voice and self._voice_turn_cancelled():
             advice.timings.extra.append("TTS: skipped (newer speech)")
             return advice
         tts_hold = False
-        if self._voice and not self._voice.is_coach_speaking():
+        if mic_during_tts and self._voice and not self._voice.is_coach_speaking():
             self._voice.set_coach_speaking(True)
             tts_hold = True
         try:
@@ -335,9 +341,12 @@ class CoachRunner:
             grace_until = time.monotonic() + grace_s if grace_s > 0 else 0.0
 
             def stop_check() -> bool:
+                if not mic_during_tts:
+                    return False
                 return self._barge_in_stop_check(grace_until=grace_until)
 
-            self._set_mic_active(True)
+            if mic_during_tts:
+                self._set_mic_active(True)
             self._emit(ev.status_event(ev.STATE_SPEAKING, game_id=self._game_id))
             tts_started = time.monotonic()
             tts_result = self._tts.speak(
@@ -367,9 +376,17 @@ class CoachRunner:
             if tts_result.interrupted:
                 advice.timings.extra.append("TTS interrupted — user speech")
                 return advice
-            if self._voice and self._voice.pending_count() > 0:
+            if mic_during_tts and self._voice and self._voice.pending_count() > 0:
                 advice.timings.extra.append("post-speech wait: skipped (voice queued)")
             else:
+                if not mic_during_tts:
+                    self._emit(
+                        ev.status_event(
+                            ev.STATE_LISTENING,
+                            detail="cooldown",
+                            game_id=self._game_id,
+                        )
+                    )
                 advice.timings.post_speech_wait_s = self._wait_after_speech()
         finally:
             if tts_hold and self._voice:
@@ -389,6 +406,7 @@ class CoachRunner:
     def _run_screen_cycle_inner(
         self, cycle_start: float, timings: CycleTimings
     ) -> None:
+        apply_low_priority()
         self._emit(ev.status_event(ev.STATE_CAPTURING, game_id=self._game_id))
         screenshot: Screenshot | None = None
 
@@ -517,10 +535,11 @@ class CoachRunner:
 
         self._on_advice(advice, screenshot)
         self._emit(ev.advice_event(advice, screenshot))
-        advice = self._speak_advice(advice, cycle_start)
+        advice = self._speak_advice(advice, cycle_start, mic_during_tts=False)
         self._print_timings(advice)
         self._emit_cost(advice)
-        self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
+        if advice.tts is None or advice.tts.interrupted:
+            self._emit(ev.status_event(ev.STATE_LISTENING, game_id=self._game_id))
 
     def _run_voice_turn(self, utterance: MicUtterance) -> None:
         cycle_start = time.monotonic()

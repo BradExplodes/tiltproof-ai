@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -136,6 +137,9 @@ class ScreenCapturer:
         grab_started = time.monotonic()
         raw = self._sct.grab(monitors[self._monitor_index])
         grab_s = time.monotonic() - grab_started
+        # Let the compositor/game recover one frame after BitBlt capture.
+        if sys.platform == "win32" and not probe:
+            time.sleep(0.016)
 
         encode_started = time.monotonic()
         img = Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
