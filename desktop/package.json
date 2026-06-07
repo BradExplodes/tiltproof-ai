@@ -1,6 +1,6 @@
 {
     "name": "aicoach-desktop",
-    "version": "0.2.4",
+    "version": "0.2.5",
     "type": "module",
     "private": true,
     "description": "Tiltproof AI desktop app",
@@ -44,7 +44,7 @@
             "target": [
                 "nsis"
             ],
-            "icon": "public/tiltproof-icon.png",
+            "icon": "build-resources/icon.png",
             "artifactName": "Tiltproof-AI-Setup-${version}.${ext}"
         },
         "nsis": {
