@@ -19,6 +19,7 @@ ENV_API_KEY = "ELEVENLABS_API_KEY"
 ENV_PROXY_TOKEN = "AICOACH_PROXY_TOKEN"
 
 DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1"
+USER_AGENT = "TiltproofAI-Engine/0.2.1 (+https://tiltproof.net)"
 
 
 class ElevenLabsError(RuntimeError):
@@ -49,6 +50,32 @@ def configured() -> bool:
     return bool(api_key())
 
 
+def _format_http_error(code: int, detail: str) -> str:
+    try:
+        payload = json.loads(detail)
+        if isinstance(payload, dict):
+            inner = payload.get("detail", detail)
+            if isinstance(inner, str):
+                try:
+                    nested = json.loads(inner)
+                    errors = nested.get("errors") if isinstance(nested, dict) else None
+                    if errors and isinstance(errors, list) and errors:
+                        err = errors[0]
+                        title = err.get("title", "")
+                        msg = err.get("detail", "")
+                        return f"ElevenLabs HTTP {code}: {title}. {msg}".strip()
+                except json.JSONDecodeError:
+                    pass
+                if len(inner) > 240:
+                    inner = inner[:240] + "…"
+                return f"ElevenLabs HTTP {code}: {inner}"
+    except json.JSONDecodeError:
+        pass
+    if len(detail) > 240:
+        detail = detail[:240] + "…"
+    return f"ElevenLabs HTTP {code}: {detail}"
+
+
 def request(
     path: str,
     *,
@@ -71,6 +98,7 @@ def request(
     headers = {
         "xi-api-key": key,
         "Accept": accept,
+        "User-Agent": USER_AGENT,
     }
     if body is not None:
         data = json.dumps(body).encode("utf-8")
@@ -82,7 +110,7 @@ def request(
             return resp.read()
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise ElevenLabsError(f"ElevenLabs HTTP {exc.code}: {detail}") from exc
+        raise ElevenLabsError(_format_http_error(exc.code, detail)) from exc
     except urllib.error.URLError as exc:
         raise ElevenLabsError(f"ElevenLabs request failed: {exc}") from exc
 

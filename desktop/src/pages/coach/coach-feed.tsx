@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef } from "react";
+import { ChevronRight } from "@untitledui/icons";
 import { Badge } from "@/components/base/badges/badges";
 import { useEngineSelector } from "@/lib/engine";
 import type { FeedItem } from "@/lib/engine-types";
@@ -72,12 +73,24 @@ const FeedMessages = memo(function FeedMessages() {
     );
 });
 
-export const CoachFeed = memo(function CoachFeed() {
+export const CoachFeed = memo(function CoachFeed({ onMinimize }: { onMinimize?: () => void }) {
     return (
-        <aside className="flex min-h-0 flex-col rounded-xl border border-secondary bg-secondary">
+        <aside className="flex min-h-0 flex-1 flex-col rounded-xl border border-secondary bg-secondary">
             <div className="flex items-center justify-between border-b border-secondary px-4 py-3">
                 <h2 className="text-sm font-semibold text-secondary">Coach feed</h2>
-                <FeedActivityLabel />
+                <div className="flex items-center gap-2">
+                    <FeedActivityLabel />
+                    {onMinimize && (
+                        <button
+                            type="button"
+                            title="Minimize feed"
+                            onClick={onMinimize}
+                            className="flex size-7 items-center justify-center rounded-md text-tertiary hover:bg-primary_hover hover:text-secondary"
+                        >
+                            <ChevronRight className="size-4" />
+                        </button>
+                    )}
+                </div>
             </div>
             <FeedMessages />
         </aside>

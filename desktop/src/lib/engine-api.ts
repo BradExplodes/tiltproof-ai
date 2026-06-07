@@ -2,6 +2,27 @@ import type { ElevenLabsVoice } from "@/lib/engine-types";
 
 let httpUrlCache: string | null = null;
 
+function formatApiError(status: number, body: string): string {
+    try {
+        const json = JSON.parse(body) as { detail?: string; error?: { message?: string } };
+        const detail = json.detail ?? json.error?.message;
+        if (detail) {
+            try {
+                const nested = JSON.parse(detail) as { errors?: { title?: string; detail?: string }[] };
+                const err = nested.errors?.[0];
+                if (err?.title) return `${err.title}${err.detail ? `: ${err.detail}` : ""}`;
+            } catch {
+                /* plain string detail */
+            }
+            if (detail.length > 200) return `${detail.slice(0, 200)}…`;
+            return detail;
+        }
+    } catch {
+        /* not json */
+    }
+    return body || `Request failed (${status})`;
+}
+
 async function baseUrl(): Promise<string> {
     if (httpUrlCache) return httpUrlCache;
     if (typeof window === "undefined" || !window.aicoach) {
@@ -16,7 +37,7 @@ export async function fetchVoices(): Promise<ElevenLabsVoice[]> {
     const res = await fetch(`${await baseUrl()}/voices`);
     if (!res.ok) {
         const detail = await res.text();
-        throw new Error(detail || `Failed to load voices (${res.status})`);
+        throw new Error(formatApiError(res.status, detail));
     }
     const data = (await res.json()) as { voices: ElevenLabsVoice[] };
     return data.voices ?? [];
@@ -30,7 +51,7 @@ export async function fetchVoicePreview(voiceId: string, text?: string): Promise
     });
     if (!res.ok) {
         const detail = await res.text();
-        throw new Error(detail || `Preview failed (${res.status})`);
+        throw new Error(formatApiError(res.status, detail));
     }
     return res.blob();
 }

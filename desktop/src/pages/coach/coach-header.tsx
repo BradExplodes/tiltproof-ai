@@ -58,7 +58,7 @@ const AccountControls = memo(function AccountControls() {
 
 export const CoachHeader = memo(function CoachHeader() {
     return (
-        <header className="flex items-center justify-between border-b border-secondary px-6 py-4">
+        <header className="flex items-center justify-between border-b border-secondary px-6 pt-2 pb-4">
             <div className="flex items-center gap-3">
                 <span className="text-lg font-semibold">Tiltproof AI</span>
                 <EngineStateBadge />
