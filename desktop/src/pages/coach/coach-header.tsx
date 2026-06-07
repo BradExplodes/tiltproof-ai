@@ -3,6 +3,7 @@ import { LogOut01 } from "@untitledui/icons";
 import { BadgeWithDot } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { useAuthActions, useAuthSelector } from "@/lib/auth";
+import { TILTPROOF_LOGO_URL } from "@/lib/branding";
 import { useEngineSelector } from "@/lib/engine";
 import { STATE_BADGE, usageFromMe } from "@/pages/coach/shared";
 
@@ -62,7 +63,7 @@ export const CoachHeader = memo(function CoachHeader() {
             <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2.5">
                     <img
-                        src="/tiltproof-logo.png"
+                        src={TILTPROOF_LOGO_URL}
                         alt=""
                         width={32}
                         height={32}

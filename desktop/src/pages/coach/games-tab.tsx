@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import { Check } from "@untitledui/icons";
 import { Badge } from "@/components/base/badges/badges";
+import { TILTPROOF_ICON_URL } from "@/lib/branding";
 import { getGameInfo } from "@/lib/games";
 import { useEngineActions, useEngineSelector } from "@/lib/engine";
 
@@ -34,7 +35,7 @@ const GameCard = memo(function GameCard({
                     />
                 ) : (
                     <div className="flex size-full flex-col items-center justify-center gap-2 bg-secondary px-4 text-center">
-                        <img src="/tiltproof-icon.png" alt="" className="size-12 object-contain opacity-60" />
+                        <img src={TILTPROOF_ICON_URL} alt="" className="size-12 object-contain opacity-60" />
                         <span className="text-sm font-semibold text-secondary">{info.name}</span>
                     </div>
                 )}

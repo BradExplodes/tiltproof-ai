@@ -1,3 +1,5 @@
+import { gameThumbnailUrl } from "@/lib/branding";
+
 export interface GameInfo {
     id: string;
     name: string;
@@ -9,7 +11,7 @@ export const GAME_CATALOG: Record<string, GameInfo> = {
     deadlock: {
         id: "deadlock",
         name: "Deadlock",
-        thumbnail: "/games/deadlock.png",
+        thumbnail: gameThumbnailUrl("deadlock.png"),
         tagline: "6v6 action MOBA from Valve",
     },
     "league-of-legends": {

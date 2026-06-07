@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Play } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import { useAuthSelector } from "@/lib/auth";
+import { TILTPROOF_ICON_URL } from "@/lib/branding";
 import { getGameInfo } from "@/lib/games";
 import { useEngineActions, useEngineSelector } from "@/lib/engine";
 import { usageFromMe } from "@/pages/coach/shared";
@@ -27,7 +28,7 @@ export const GameControls = memo(function GameControls() {
                                 className="size-10 rounded-md object-cover"
                             />
                         ) : (
-                            <img src="/tiltproof-icon.png" alt="" className="size-10 object-contain" />
+                            <img src={TILTPROOF_ICON_URL} alt="" className="size-10 object-contain" />
                         )}
                         <div>
                             <p className="text-sm font-semibold text-primary">{selected.name}</p>

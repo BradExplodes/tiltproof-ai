@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from "react";
-import { ChevronUp } from "@untitledui/icons";
+import { ChevronRight } from "@untitledui/icons";
 import { Badge } from "@/components/base/badges/badges";
 import { useEngineSelector } from "@/lib/engine";
 import type { FeedItem } from "@/lib/engine-types";
@@ -90,7 +90,7 @@ export const CoachFeed = memo(function CoachFeed({ onMinimize }: { onMinimize?: 
                             onClick={onMinimize}
                             className="flex size-7 items-center justify-center rounded-md text-tertiary hover:bg-primary_hover hover:text-secondary"
                         >
-                            <ChevronUp className="size-4" />
+                            <ChevronRight className="size-4" />
                         </button>
                     )}
                 </div>
