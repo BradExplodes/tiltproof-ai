@@ -39,6 +39,13 @@ const GameCard = memo(function GameCard({
                         <span className="text-sm font-semibold text-secondary">{info.name}</span>
                     </div>
                 )}
+                {!selected && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                        <span className="rounded-lg bg-brand-solid px-4 py-2 text-sm font-semibold text-white shadow-sm">
+                            Select game
+                        </span>
+                    </div>
+                )}
                 {selected && (
                     <div className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-full bg-brand-solid text-white shadow-sm">
                         <Check className="size-4" />
