@@ -57,9 +57,19 @@ export interface RuntimeConfig {
     monitor_index: number;
     interval_seconds: number | null;
     tts_enabled: boolean | null;
+    tts_voice_id: string | null;
     voice_input_enabled: boolean | null;
     ocr_enabled: boolean | null;
     web_search_enabled: boolean | null;
+}
+
+export interface ElevenLabsVoice {
+    voice_id: string;
+    name: string;
+    description: string;
+    category: string;
+    preview_url: string | null;
+    labels: Record<string, string>;
 }
 
 export interface PerfEvent {

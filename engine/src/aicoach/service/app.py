@@ -17,11 +17,16 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 
 from aicoach import events as ev
 from aicoach.capture import list_monitors
+from aicoach.config import Settings
+from aicoach.elevenlabs_client import ElevenLabsError
+from aicoach.elevenlabs_client import list_voices as fetch_elevenlabs_voices
 from aicoach.prompts import list_games
+from aicoach.tts import PREVIEW_SAMPLE_TEXT, synthesize_preview_wav
 from aicoach.service.bus import EventBus
 from aicoach.service.session import CoachSession
 
@@ -61,6 +66,32 @@ def create_app(token: str | None = None) -> FastAPI:
     @app.get("/state")
     async def state() -> dict[str, Any]:
         return app.state.session.state()
+
+    @app.get("/voices")
+    async def voices() -> dict[str, Any]:
+        try:
+            return {"voices": fetch_elevenlabs_voices()}
+        except ElevenLabsError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.post("/tts/preview")
+    async def tts_preview(body: dict[str, Any]) -> Response:
+        voice_id = (body.get("voice_id") or "").strip()
+        if not voice_id:
+            raise HTTPException(status_code=400, detail="voice_id is required")
+        try:
+            settings = Settings.from_env()
+            text = (body.get("text") or PREVIEW_SAMPLE_TEXT).strip()
+            wav = synthesize_preview_wav(
+                voice_id=voice_id,
+                model_id=settings.elevenlabs_model,
+                text=text,
+            )
+        except ElevenLabsError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return Response(content=wav, media_type="audio/wav")
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket, token_q: str | None = Query(default=None, alias="token")):

@@ -30,6 +30,7 @@ class RuntimeConfig:
     monitor_index: int = 1
     interval_seconds: float | None = None
     tts_enabled: bool | None = None
+    tts_voice_id: str | None = None
     voice_input_enabled: bool | None = None
     ocr_enabled: bool | None = None
     web_search_enabled: bool | None = None
@@ -45,6 +46,7 @@ class RuntimeConfig:
             "monitor_index": self.monitor_index,
             "interval_seconds": self.interval_seconds,
             "tts_enabled": self.tts_enabled,
+            "tts_voice_id": self.tts_voice_id,
             "voice_input_enabled": self.voice_input_enabled,
             "ocr_enabled": self.ocr_enabled,
             "web_search_enabled": self.web_search_enabled,
@@ -56,6 +58,8 @@ class RuntimeConfig:
             changes["capture_interval_seconds"] = self.interval_seconds
         if self.tts_enabled is not None:
             changes["tts_enabled"] = self.tts_enabled
+        if self.tts_voice_id:
+            changes["elevenlabs_voice_id"] = self.tts_voice_id
         if self.voice_input_enabled is not None:
             changes["voice_input_enabled"] = self.voice_input_enabled
         if self.ocr_enabled is not None:

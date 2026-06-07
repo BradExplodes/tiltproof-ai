@@ -14,7 +14,7 @@ from aicoach.config import Settings
 from aicoach.cycle_timings import CycleTimings
 from aicoach.pricing import estimate_stt_cost_usd
 from aicoach.prompts import load_prompt
-from aicoach.tts import OpenAITTS
+from aicoach.tts import SpeechSynthesizer, build_tts
 from aicoach.voice import (
     MicUtterance,
     VoiceListener,
@@ -83,13 +83,7 @@ class CoachRunner:
             web_search_context_size=settings.web_search_context_size,
             web_search_scenes=settings.web_search_scenes,
         )
-        self._tts: OpenAITTS | None = None
-        if settings.tts_enabled:
-            self._tts = OpenAITTS(
-                settings.openai_api_key,
-                model=settings.tts_model,
-                voice=settings.tts_voice,
-            )
+        self._tts: SpeechSynthesizer | None = build_tts(settings)
         self._voice: VoiceListener | None = None
         if settings.voice_input_enabled:
             try:

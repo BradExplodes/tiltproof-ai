@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import re
 import tempfile
@@ -8,14 +9,20 @@ import wave
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
+from aicoach.elevenlabs_client import ElevenLabsError, synthesize_pcm
 from aicoach.openai_client import build_openai_client
 
-from aicoach.pricing import estimate_tts_cost_usd
+from aicoach.config import Settings
+from aicoach.pricing import estimate_elevenlabs_tts_cost_usd, estimate_tts_cost_usd
 from aicoach.response_parse import clean_spoken_output
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+PREVIEW_SAMPLE_TEXT = "Hey — I'm your Tiltproof coach. Let's keep you sharp and tilt-free."
 
 
 @dataclass(frozen=True)
@@ -28,6 +35,15 @@ class TTSResult:
     interrupted: bool = False
 
 
+class SpeechSynthesizer(Protocol):
+    def speak(
+        self,
+        text: str,
+        *,
+        stop_check: Callable[[], bool] | None = None,
+    ) -> TTSResult: ...
+
+
 def prepare_text_for_speech(text: str, max_chars: int = 1200) -> str:
     """Strip markdown, brackets, and cap length so TTS sounds natural."""
     cleaned = clean_spoken_output(text)
@@ -38,6 +54,20 @@ def prepare_text_for_speech(text: str, max_chars: int = 1200) -> str:
     if len(cleaned) > max_chars:
         cleaned = cleaned[: max_chars - 3].rsplit(" ", 1)[0] + "..."
     return cleaned
+
+
+def pcm_to_wav(pcm: bytes, *, sample_rate: int = 44100, channels: int = 1) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
+
+
+def write_pcm_wav_file(path: Path, pcm: bytes, *, sample_rate: int = 44100) -> None:
+    path.write_bytes(pcm_to_wav(pcm, sample_rate=sample_rate))
 
 
 def _load_wav_mono(path: Path) -> tuple[np.ndarray, int]:
@@ -206,3 +236,114 @@ class OpenAITTS:
             play_seconds=play_s,
             interrupted=interrupted,
         )
+
+
+class ElevenLabsTTS:
+    """ElevenLabs speech API with interruptible playback."""
+
+    def __init__(
+        self,
+        *,
+        voice_id: str,
+        model_id: str = "eleven_turbo_v2_5",
+    ) -> None:
+        self._voice_id = voice_id
+        self._model_id = model_id
+
+    def speak(
+        self,
+        text: str,
+        *,
+        stop_check: Callable[[], bool] | None = None,
+    ) -> TTSResult:
+        spoken = prepare_text_for_speech(text)
+        if not spoken:
+            logger.warning("Empty TTS text; skipping playback")
+            return TTSResult(
+                characters=0,
+                estimated_usd=0.0,
+                playback_seconds=0.0,
+                api_seconds=0.0,
+                play_seconds=0.0,
+            )
+
+        estimated = estimate_elevenlabs_tts_cost_usd(self._model_id, spoken)
+        logger.info(
+            "TTS (ElevenLabs %s, voice=%s): %s chars (~$%.4f)",
+            self._model_id,
+            self._voice_id,
+            len(spoken),
+            estimated,
+        )
+
+        started = time.monotonic()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            audio_path = Path(tmp.name)
+
+        api_s = 0.0
+        play_s = 0.0
+        interrupted = False
+        try:
+            api_started = time.monotonic()
+            pcm = synthesize_pcm(
+                spoken,
+                voice_id=self._voice_id,
+                model_id=self._model_id,
+            )
+            write_pcm_wav_file(audio_path, pcm)
+            api_s = time.monotonic() - api_started
+            logger.info(
+                "TTS audio received in %.1fs (%s bytes) — playing",
+                api_s,
+                audio_path.stat().st_size,
+            )
+            play_started = time.monotonic()
+            completed = play_audio_file(audio_path, stop_check=stop_check)
+            play_s = time.monotonic() - play_started
+            interrupted = not completed
+            if interrupted:
+                logger.debug("TTS playback stopped after %.1fs", play_s)
+        except ElevenLabsError:
+            logger.exception("ElevenLabs TTS failed")
+            raise
+        finally:
+            audio_path.unlink(missing_ok=True)
+
+        playback = time.monotonic() - started
+        return TTSResult(
+            characters=len(spoken),
+            estimated_usd=estimated,
+            playback_seconds=playback,
+            api_seconds=api_s,
+            play_seconds=play_s,
+            interrupted=interrupted,
+        )
+
+
+def synthesize_preview_wav(
+    *,
+    voice_id: str,
+    model_id: str,
+    text: str = PREVIEW_SAMPLE_TEXT,
+) -> bytes:
+    spoken = prepare_text_for_speech(text, max_chars=400)
+    pcm = synthesize_pcm(spoken, voice_id=voice_id, model_id=model_id)
+    return pcm_to_wav(pcm)
+
+
+def build_tts(settings: Settings) -> SpeechSynthesizer | None:
+    if not settings.tts_enabled:
+        return None
+    provider = settings.tts_provider.strip().lower()
+    if provider == "openai":
+        return OpenAITTS(
+            settings.openai_api_key,
+            model=settings.tts_model,
+            voice=settings.tts_voice,
+        )
+    if provider == "elevenlabs":
+        return ElevenLabsTTS(
+            voice_id=settings.elevenlabs_voice_id,
+            model_id=settings.elevenlabs_model,
+        )
+    raise ValueError(f"Unknown TTS_PROVIDER: {settings.tts_provider!r}")

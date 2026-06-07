@@ -106,6 +106,7 @@ export class EngineStore {
                         prev.config.monitor_index === config.monitor_index &&
                         prev.config.interval_seconds === config.interval_seconds &&
                         prev.config.tts_enabled === config.tts_enabled &&
+                        prev.config.tts_voice_id === config.tts_voice_id &&
                         prev.config.voice_input_enabled === config.voice_input_enabled &&
                         prev.config.ocr_enabled === config.ocr_enabled &&
                         prev.config.web_search_enabled === config.web_search_enabled;

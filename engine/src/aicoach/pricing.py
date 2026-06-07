@@ -57,6 +57,20 @@ def estimate_tts_cost_usd(model: str, text: str) -> float:
     return len(text) * rate / 1_000_000
 
 
+# ElevenLabs approximate USD per 1M characters (varies by plan/model).
+ELEVENLABS_RATES_PER_1M_CHARS: dict[str, float] = {
+    "eleven_turbo_v2_5": 180.0,
+    "eleven_turbo_v2": 180.0,
+    "eleven_multilingual_v2": 300.0,
+    "eleven_monolingual_v1": 300.0,
+}
+
+
+def estimate_elevenlabs_tts_cost_usd(model: str, text: str) -> float:
+    rate = ELEVENLABS_RATES_PER_1M_CHARS.get(model, 180.0)
+    return len(text) * rate / 1_000_000
+
+
 # Speech-to-text: billed per minute of audio (OpenAI standard tier).
 STT_USD_PER_MINUTE: dict[str, float] = {
     "whisper-1": 0.006,

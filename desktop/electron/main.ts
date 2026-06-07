@@ -43,9 +43,12 @@ function startEngine(): void {
     env.PERF_LOG = "1";
     if (session) {
         env.AICOACH_OPENAI_BASE_URL = `${BACKEND_BASE}/openai/v1`;
+        env.AICOACH_ELEVENLABS_BASE_URL = `${BACKEND_BASE}/elevenlabs/v1`;
         env.AICOACH_PROXY_TOKEN = session.token;
+        env.TTS_PROVIDER = "elevenlabs";
     } else {
         delete env.AICOACH_OPENAI_BASE_URL;
+        delete env.AICOACH_ELEVENLABS_BASE_URL;
         delete env.AICOACH_PROXY_TOKEN;
     }
     try {

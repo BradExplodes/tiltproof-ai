@@ -32,8 +32,11 @@ class Settings:
     capture_jpeg_quality: int
     describe_max_tokens: int
     tts_enabled: bool
+    tts_provider: str
     tts_model: str
     tts_voice: str
+    elevenlabs_voice_id: str
+    elevenlabs_model: str
     post_speech_delay_seconds: float
     tts_barge_grace_seconds: float
     max_history_messages: int
@@ -191,8 +194,11 @@ class Settings:
             capture_jpeg_quality=capture_jpeg_quality,
             describe_max_tokens=describe_max_tokens,
             tts_enabled=_env_bool("TTS_ENABLED", True),
+            tts_provider=os.getenv("TTS_PROVIDER", "elevenlabs").strip().lower(),
             tts_model=os.getenv("TTS_MODEL", "tts-1"),
             tts_voice=os.getenv("TTS_VOICE", "ash"),
+            elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
+            elevenlabs_model=os.getenv("ELEVENLABS_MODEL", "eleven_turbo_v2_5"),
             post_speech_delay_seconds=post_speech_delay,
             tts_barge_grace_seconds=tts_barge_grace,
             max_history_messages=max_history_messages,
