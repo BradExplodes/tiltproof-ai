@@ -225,6 +225,11 @@ ipcMain.handle("update:install", () => {
 
 ipcMain.handle("app:version", () => app.getVersion());
 
+// Windows Start menu / taskbar grouping uses this ID with the embedded .exe icon.
+if (process.platform === "win32") {
+    app.setAppUserModelId("net.tiltproof.app");
+}
+
 app.whenReady().then(() => {
     startEngine();
     void createWindow();
