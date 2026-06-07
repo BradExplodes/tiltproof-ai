@@ -12,11 +12,12 @@ const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 let engine: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 
-function appIconPath(): string {
+/** Title-bar icon (taskbar/shortcut icon comes from electron-builder win.icon). */
+function windowIconPath(): string {
     if (DEV_URL) {
-        return path.join(__dirname, "..", "public", "tiltproof-icon.png");
+        return path.join(__dirname, "..", "public", "tiltproof-logo.png");
     }
-    return path.join(process.resourcesPath, "tiltproof-icon.png");
+    return path.join(process.resourcesPath, "tiltproof-logo.png");
 }
 
 /** Where to find the engine server: repo venv in dev, bundled exe in prod. */
@@ -111,7 +112,7 @@ async function createWindow(): Promise<void> {
         minWidth: 880,
         minHeight: 560,
         backgroundColor: "#0c0e12",
-        icon: appIconPath(),
+        icon: windowIconPath(),
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),

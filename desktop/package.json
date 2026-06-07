@@ -1,6 +1,6 @@
 {
     "name": "aicoach-desktop",
-    "version": "0.2.8",
+    "version": "0.2.9",
     "type": "module",
     "private": true,
     "description": "Tiltproof AI desktop app",
@@ -36,8 +36,8 @@
                 "to": "engine"
             },
             {
-                "from": "public/tiltproof-icon.png",
-                "to": "tiltproof-icon.png"
+                "from": "public/tiltproof-logo.png",
+                "to": "tiltproof-logo.png"
             }
         ],
         "win": {
