@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import re
 import tempfile
 import time
@@ -12,7 +13,11 @@ from pathlib import Path
 from typing import Protocol
 
 import numpy as np
-from aicoach.elevenlabs_client import ElevenLabsError, synthesize_pcm
+from aicoach.elevenlabs_client import (
+    DEFAULT_OUTPUT_FORMAT,
+    ElevenLabsError,
+    synthesize_speech,
+)
 from aicoach.openai_client import build_openai_client
 
 from aicoach.config import Settings
@@ -84,7 +89,77 @@ def _load_wav_mono(path: Path) -> tuple[np.ndarray, int]:
     return samples, sample_rate
 
 
-def play_audio_file(
+def _poll_playback(
+    proc: object | None,
+    *,
+    duration_s: float,
+    stop_check: Callable[[], bool] | None,
+    poll_interval_s: float,
+    on_interrupt: Callable[[], None],
+    is_done: Callable[[], bool] | None = None,
+) -> bool:
+    import subprocess
+    import time
+
+    deadline = time.monotonic() + duration_s + 2.0
+    try:
+        while time.monotonic() < deadline:
+            if stop_check and stop_check():
+                if isinstance(proc, subprocess.Popen):
+                    proc.terminate()
+                else:
+                    on_interrupt()
+                logger.info("TTS playback interrupted (barge-in)")
+                return False
+            if isinstance(proc, subprocess.Popen):
+                if proc.poll() is not None:
+                    return proc.returncode == 0
+            elif is_done and is_done():
+                return True
+            time.sleep(poll_interval_s)
+        if isinstance(proc, subprocess.Popen):
+            proc.terminate()
+        else:
+            on_interrupt()
+        return False
+    finally:
+        if isinstance(proc, subprocess.Popen) and proc.poll() is None:
+            proc.terminate()
+
+
+def _estimate_mp3_duration_s(path: Path) -> float:
+    # mp3_44100_128 ≈ 16 KB/s payload; add headroom for ID3/container.
+    return path.stat().st_size / 16_000 + 1.0
+
+
+def play_mp3_file(
+    path: Path,
+    *,
+    stop_check: Callable[[], bool] | None = None,
+    poll_interval_s: float = 0.03,
+) -> bool:
+    """Play MP3 in a child process so playback can be killed without touching the mic stream."""
+    import subprocess
+    import sys
+
+    if not path.exists() or path.stat().st_size < 100:
+        raise RuntimeError(f"TTS audio file missing or too small: {path}")
+
+    duration_s = _estimate_mp3_duration_s(path)
+    env = {**os.environ, "AICOACH_TTS_PATH": str(path)}
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import os; from playsound import playsound; playsound(os.environ['AICOACH_TTS_PATH'], block=True)",
+        ],
+        env=env,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    return _poll_playback(proc, duration_s=duration_s, stop_check=stop_check, poll_interval_s=poll_interval_s, on_interrupt=lambda: None)
+
+
+def play_wav_file(
     path: Path,
     *,
     stop_check: Callable[[], bool] | None = None,
@@ -98,6 +173,7 @@ def play_audio_file(
     """
     import subprocess
     import sys
+    import sounddevice as sd
 
     if not path.exists() or path.stat().st_size < 100:
         raise RuntimeError(f"TTS audio file missing or too small: {path}")
@@ -119,41 +195,38 @@ def play_audio_file(
             ],
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        deadline = time.monotonic() + duration_s + 2.0
-        try:
-            while time.monotonic() < deadline:
-                if stop_check and stop_check():
-                    proc.terminate()
-                    logger.info("TTS playback interrupted (barge-in)")
-                    return False
-                if proc.poll() is not None:
-                    return proc.returncode == 0
-                time.sleep(poll_interval_s)
-            proc.terminate()
-            return False
-        finally:
-            if proc.poll() is None:
-                proc.terminate()
-
-    import sounddevice as sd
+        return _poll_playback(proc, duration_s=duration_s, stop_check=stop_check, poll_interval_s=poll_interval_s, on_interrupt=lambda: None)
 
     audio = samples.astype(np.float32) / 32768.0
     sd.play(audio, sample_rate, blocking=False)
+
+    def stream_finished() -> bool:
+        stream = sd.get_stream()
+        return stream is None or not stream.active
+
     try:
-        deadline = time.monotonic() + duration_s + 2.0
-        while time.monotonic() < deadline:
-            if stop_check and stop_check():
-                sd.stop()
-                logger.info("TTS playback interrupted (queued speech)")
-                return False
-            stream = sd.get_stream()
-            if stream is None or not stream.active:
-                return True
-            time.sleep(poll_interval_s)
-        sd.stop()
-        return False
+        return _poll_playback(
+            proc=None,
+            duration_s=duration_s,
+            stop_check=stop_check,
+            poll_interval_s=poll_interval_s,
+            on_interrupt=sd.stop,
+            is_done=stream_finished,
+        )
     finally:
         sd.stop()
+
+
+def play_audio_file(
+    path: Path,
+    *,
+    stop_check: Callable[[], bool] | None = None,
+    poll_interval_s: float = 0.03,
+) -> bool:
+    suffix = path.suffix.lower()
+    if suffix == ".mp3":
+        return play_mp3_file(path, stop_check=stop_check, poll_interval_s=poll_interval_s)
+    return play_wav_file(path, stop_check=stop_check, poll_interval_s=poll_interval_s)
 
 
 class OpenAITTS:
@@ -246,9 +319,11 @@ class ElevenLabsTTS:
         *,
         voice_id: str,
         model_id: str = "eleven_turbo_v2_5",
+        output_format: str = DEFAULT_OUTPUT_FORMAT,
     ) -> None:
         self._voice_id = voice_id
         self._model_id = model_id
+        self._output_format = output_format
 
     def speak(
         self,
@@ -277,7 +352,8 @@ class ElevenLabsTTS:
         )
 
         started = time.monotonic()
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        suffix = ".mp3" if self._output_format.startswith("mp3") else ".wav"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             audio_path = Path(tmp.name)
 
         api_s = 0.0
@@ -285,12 +361,13 @@ class ElevenLabsTTS:
         interrupted = False
         try:
             api_started = time.monotonic()
-            pcm = synthesize_pcm(
+            audio = synthesize_speech(
                 spoken,
                 voice_id=self._voice_id,
                 model_id=self._model_id,
+                output_format=self._output_format,
             )
-            write_pcm_wav_file(audio_path, pcm)
+            audio_path.write_bytes(audio)
             api_s = time.monotonic() - api_started
             logger.info(
                 "TTS audio received in %.1fs (%s bytes) — playing",
@@ -320,15 +397,23 @@ class ElevenLabsTTS:
         )
 
 
-def synthesize_preview_wav(
+def synthesize_preview_audio(
     *,
     voice_id: str,
     model_id: str,
     text: str = PREVIEW_SAMPLE_TEXT,
-) -> bytes:
+    output_format: str = DEFAULT_OUTPUT_FORMAT,
+) -> tuple[bytes, str]:
     spoken = prepare_text_for_speech(text, max_chars=400)
-    pcm = synthesize_pcm(spoken, voice_id=voice_id, model_id=model_id)
-    return pcm_to_wav(pcm)
+    audio = synthesize_speech(
+        spoken,
+        voice_id=voice_id,
+        model_id=model_id,
+        output_format=output_format,
+    )
+    if output_format.startswith("mp3"):
+        return audio, "audio/mpeg"
+    return pcm_to_wav(audio), "audio/wav"
 
 
 def build_tts(settings: Settings) -> SpeechSynthesizer | None:
@@ -345,5 +430,6 @@ def build_tts(settings: Settings) -> SpeechSynthesizer | None:
         return ElevenLabsTTS(
             voice_id=settings.elevenlabs_voice_id,
             model_id=settings.elevenlabs_model,
+            output_format=settings.elevenlabs_output_format,
         )
     raise ValueError(f"Unknown TTS_PROVIDER: {settings.tts_provider!r}")

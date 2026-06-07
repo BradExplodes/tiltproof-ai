@@ -5,7 +5,13 @@ let httpUrlCache: string | null = null;
 function formatApiError(status: number, body: string): string {
     try {
         const json = JSON.parse(body) as { detail?: string; error?: { message?: string } };
-        const detail = json.detail ?? json.error?.message;
+        const rawDetail = json.detail ?? json.error?.message;
+        const detail =
+            typeof rawDetail === "string"
+                ? rawDetail
+                : rawDetail && typeof rawDetail === "object" && "message" in rawDetail
+                  ? String((rawDetail as { message?: string }).message ?? rawDetail)
+                  : null;
         if (detail) {
             try {
                 const nested = JSON.parse(detail) as { errors?: { title?: string; detail?: string }[] };

@@ -37,6 +37,7 @@ class Settings:
     tts_voice: str
     elevenlabs_voice_id: str
     elevenlabs_model: str
+    elevenlabs_output_format: str
     post_speech_delay_seconds: float
     tts_barge_grace_seconds: float
     max_history_messages: int
@@ -199,6 +200,7 @@ class Settings:
             tts_voice=os.getenv("TTS_VOICE", "ash"),
             elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
             elevenlabs_model=os.getenv("ELEVENLABS_MODEL", "eleven_turbo_v2_5"),
+            elevenlabs_output_format=os.getenv("ELEVENLABS_OUTPUT_FORMAT", "mp3_44100_128"),
             post_speech_delay_seconds=post_speech_delay,
             tts_barge_grace_seconds=tts_barge_grace,
             max_history_messages=max_history_messages,

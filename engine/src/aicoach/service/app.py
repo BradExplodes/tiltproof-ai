@@ -26,7 +26,7 @@ from aicoach.config import Settings
 from aicoach.elevenlabs_client import ElevenLabsError
 from aicoach.elevenlabs_client import list_voices as fetch_elevenlabs_voices
 from aicoach.prompts import list_games
-from aicoach.tts import PREVIEW_SAMPLE_TEXT, synthesize_preview_wav
+from aicoach.tts import PREVIEW_SAMPLE_TEXT, synthesize_preview_audio
 from aicoach.service.bus import EventBus
 from aicoach.service.session import CoachSession
 
@@ -82,16 +82,17 @@ def create_app(token: str | None = None) -> FastAPI:
         try:
             settings = Settings.from_env()
             text = (body.get("text") or PREVIEW_SAMPLE_TEXT).strip()
-            wav = synthesize_preview_wav(
+            audio, media_type = synthesize_preview_audio(
                 voice_id=voice_id,
                 model_id=settings.elevenlabs_model,
                 text=text,
+                output_format=settings.elevenlabs_output_format,
             )
         except ElevenLabsError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return Response(content=wav, media_type="audio/wav")
+        return Response(content=audio, media_type=media_type)
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket, token_q: str | None = Query(default=None, alias="token")):

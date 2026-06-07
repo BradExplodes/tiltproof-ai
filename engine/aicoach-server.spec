@@ -36,6 +36,7 @@ hidden = (
         "dxcam",
         "comtypes",
         "dotenv",
+        "playsound",
     ]
 )
 

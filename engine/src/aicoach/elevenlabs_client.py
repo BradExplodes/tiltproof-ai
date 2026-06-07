@@ -19,7 +19,15 @@ ENV_API_KEY = "ELEVENLABS_API_KEY"
 ENV_PROXY_TOKEN = "AICOACH_PROXY_TOKEN"
 
 DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1"
-USER_AGENT = "TiltproofAI-Engine/0.2.1 (+https://tiltproof.net)"
+USER_AGENT = "TiltproofAI-Engine/0.2.2 (+https://tiltproof.net)"
+# Free/starter tiers do not include raw PCM; MP3 44.1 kHz @ 128kbps works on all plans.
+DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
+
+_FORMAT_ACCEPT: dict[str, str] = {
+    "mp3_44100_128": "audio/mpeg",
+    "mp3_44100_192": "audio/mpeg",
+    "pcm_44100": "audio/pcm",
+}
 
 
 class ElevenLabsError(RuntimeError):
@@ -55,6 +63,9 @@ def _format_http_error(code: int, detail: str) -> str:
         payload = json.loads(detail)
         if isinstance(payload, dict):
             inner = payload.get("detail", detail)
+            if isinstance(inner, dict):
+                msg = inner.get("message") or inner.get("status") or str(inner)
+                return f"ElevenLabs HTTP {code}: {msg}"
             if isinstance(inner, str):
                 try:
                     nested = json.loads(inner)
@@ -133,18 +144,19 @@ def list_voices() -> list[dict[str, Any]]:
     ]
 
 
-def synthesize_pcm(
+def synthesize_speech(
     text: str,
     *,
     voice_id: str,
     model_id: str,
-    output_format: str = "pcm_44100",
+    output_format: str = DEFAULT_OUTPUT_FORMAT,
 ) -> bytes:
     path = f"text-to-speech/{voice_id}"
+    accept = _FORMAT_ACCEPT.get(output_format, "audio/mpeg")
     return request(
         path,
         method="POST",
         body={"text": text, "model_id": model_id},
         query={"output_format": output_format},
-        accept="audio/pcm",
+        accept=accept,
     )
