@@ -60,7 +60,16 @@ export const CoachHeader = memo(function CoachHeader() {
     return (
         <header className="flex items-center justify-between border-b border-secondary px-6 pt-2 pb-4">
             <div className="flex items-center gap-3">
-                <span className="text-lg font-semibold">Tiltproof AI</span>
+                <div className="flex items-center gap-2.5">
+                    <img
+                        src="/tiltproof-logo.png"
+                        alt=""
+                        width={32}
+                        height={32}
+                        className="size-8 shrink-0 object-contain"
+                    />
+                    <span className="text-lg font-semibold text-primary">Tiltproof AI</span>
+                </div>
                 <EngineStateBadge />
             </div>
             <div className="flex items-center gap-3">

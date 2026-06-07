@@ -1,17 +1,19 @@
 import { memo, useState } from "react";
-import { Settings01, Microphone01, User01 } from "@untitledui/icons";
+import { Settings01, Microphone01, User01, Grid01 } from "@untitledui/icons";
 import { Tabs } from "@/components/application/tabs/tabs";
-import { CoachFeedSidebar } from "@/pages/coach/coach-feed-sidebar";
+import { CoachFeedPanel } from "@/pages/coach/coach-feed-panel";
 import { CoachHeader } from "@/pages/coach/coach-header";
 import { CoachTab } from "@/pages/coach/coach-tab";
+import { GamesTab } from "@/pages/coach/games-tab";
 import { SettingsTab } from "@/pages/coach/settings-tab";
 import { UsageRefresh } from "@/pages/coach/usage-refresh";
 import { VoicesTab } from "@/pages/coach/voices-tab";
 
-type AppTab = "coach" | "voices" | "settings";
+type AppTab = "coach" | "games" | "voices" | "settings";
 
 const TAB_ITEMS: { id: AppTab; label: string; icon: typeof Microphone01 }[] = [
     { id: "coach", label: "Coach", icon: Microphone01 },
+    { id: "games", label: "Games", icon: Grid01 },
     { id: "voices", label: "Voice", icon: User01 },
     { id: "settings", label: "Settings", icon: Settings01 },
 ];
@@ -24,6 +26,7 @@ export const CoachScreen = memo(function CoachScreen() {
         <div className="flex h-dvh flex-col bg-primary pt-4 text-primary">
             <UsageRefresh />
             <CoachHeader />
+            <CoachFeedPanel />
             <Tabs
                 selectedKey={tab}
                 onSelectionChange={(key) => setTab(key as AppTab)}
@@ -38,19 +41,19 @@ export const CoachScreen = memo(function CoachScreen() {
                         ))}
                     </Tabs.List>
                 </div>
-                <div className="flex min-h-0 flex-1 overflow-hidden">
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-6">
-                        <Tabs.Panel id="coach" className="flex min-h-0 flex-1 flex-col outline-none">
-                            <CoachTab />
-                        </Tabs.Panel>
-                        <Tabs.Panel id="voices" className="flex min-h-0 flex-1 flex-col outline-none">
-                            <VoicesTab />
-                        </Tabs.Panel>
-                        <Tabs.Panel id="settings" className="flex min-h-0 flex-1 flex-col outline-none">
-                            <SettingsTab />
-                        </Tabs.Panel>
-                    </div>
-                    <CoachFeedSidebar />
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
+                    <Tabs.Panel id="coach" className="flex min-h-0 flex-1 flex-col outline-none">
+                        <CoachTab />
+                    </Tabs.Panel>
+                    <Tabs.Panel id="games" className="flex min-h-0 flex-1 flex-col outline-none">
+                        <GamesTab />
+                    </Tabs.Panel>
+                    <Tabs.Panel id="voices" className="flex min-h-0 flex-1 flex-col outline-none">
+                        <VoicesTab />
+                    </Tabs.Panel>
+                    <Tabs.Panel id="settings" className="flex min-h-0 flex-1 flex-col outline-none">
+                        <SettingsTab />
+                    </Tabs.Panel>
                 </div>
             </Tabs>
         </div>

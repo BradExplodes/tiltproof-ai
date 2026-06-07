@@ -12,6 +12,13 @@ const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 let engine: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 
+function appIconPath(): string {
+    if (DEV_URL) {
+        return path.join(__dirname, "..", "public", "tiltproof-icon.png");
+    }
+    return path.join(process.resourcesPath, "tiltproof-icon.png");
+}
+
 /** Where to find the engine server: repo venv in dev, bundled exe in prod. */
 function resolveEngineCommand(): { cmd: string; args: string[] } {
     const args = ["--port", String(ENGINE_PORT), "--token", ENGINE_TOKEN];
@@ -104,6 +111,7 @@ async function createWindow(): Promise<void> {
         minWidth: 880,
         minHeight: 560,
         backgroundColor: "#0c0e12",
+        icon: appIconPath(),
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
