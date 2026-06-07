@@ -5,6 +5,7 @@ import { Button } from "@/components/base/buttons/button";
 import { fetchVoicePreview, fetchVoices } from "@/lib/engine-api";
 import { useEngineActions, useEngineSelector } from "@/lib/engine";
 import type { ElevenLabsVoice } from "@/lib/engine-types";
+import { useCoachNav } from "@/pages/coach/coach-nav";
 import { configEqual } from "@/pages/coach/shared";
 
 const VoiceCard = memo(function VoiceCard({
@@ -90,6 +91,7 @@ const VoiceCard = memo(function VoiceCard({
 
 export const VoicesTab = memo(function VoicesTab() {
     const actions = useEngineActions();
+    const { goToCoach } = useCoachNav();
     const config = useEngineSelector((s) => s.config, configEqual);
     const running = useEngineSelector((s) => s.running);
     const selectedVoiceId = config?.tts_voice_id ?? null;
@@ -159,10 +161,12 @@ export const VoicesTab = memo(function VoicesTab() {
 
     const handleSelect = useCallback(
         (voiceId: string) => {
-            if (selectedVoiceId === voiceId) return;
-            actions.updateConfig({ tts_voice_id: voiceId });
+            if (selectedVoiceId !== voiceId) {
+                actions.updateConfig({ tts_voice_id: voiceId });
+            }
+            goToCoach();
         },
-        [actions, selectedVoiceId],
+        [actions, selectedVoiceId, goToCoach],
     );
 
     return (

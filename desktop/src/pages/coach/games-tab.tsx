@@ -4,6 +4,7 @@ import { Badge } from "@/components/base/badges/badges";
 import { TILTPROOF_ICON_URL } from "@/lib/branding";
 import { getGameInfo } from "@/lib/games";
 import { useEngineActions, useEngineSelector } from "@/lib/engine";
+import { useCoachNav } from "@/pages/coach/coach-nav";
 
 const GameCard = memo(function GameCard({
     gameId,
@@ -69,17 +70,21 @@ const GameCard = memo(function GameCard({
 
 export const GamesTab = memo(function GamesTab() {
     const actions = useEngineActions();
+    const { goToCoach } = useCoachNav();
     const gameId = useEngineSelector((s) => s.gameId);
     const engineGames = useEngineSelector((s) => s.games);
     const games = useMemo(() => [...engineGames].sort(), [engineGames]);
+
+    const selectGame = (id: string) => {
+        actions.setGame(id);
+        goToCoach();
+    };
 
     return (
         <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
             <div>
                 <h2 className="text-md font-semibold text-primary">Games</h2>
-                <p className="mt-1 text-sm text-tertiary">
-                    Pick the game you're playing. Head to Coach when you're ready to start a session.
-                </p>
+                <p className="mt-1 text-sm text-tertiary">Pick the game you're playing — you'll return to Coach to continue setup.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {games.map((id) => (
@@ -87,7 +92,7 @@ export const GamesTab = memo(function GamesTab() {
                         key={id}
                         gameId={id}
                         selected={gameId === id}
-                        onSelect={() => actions.setGame(id)}
+                        onSelect={() => selectGame(id)}
                     />
                 ))}
             </div>

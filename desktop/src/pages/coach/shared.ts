@@ -44,6 +44,9 @@ export const perfEqual = (a: PerfEvent | null, b: PerfEvent | null): boolean => 
     return a.phase === b.phase && a.duration_ms === b.duration_ms && a.grab_ms === b.grab_ms && a.encode_ms === b.encode_ms;
 };
 
+export const isCoachReady = (gameId: string | null, voiceId: string | null | undefined): boolean =>
+    Boolean(gameId && voiceId);
+
 export const usageFromMe = (me: { used_usd: number; quota_usd: number } | null) => {
     const unlimited = me ? me.quota_usd <= 0 : false;
     const usagePct = me && me.quota_usd > 0 ? Math.min(100, (me.used_usd / me.quota_usd) * 100) : 0;

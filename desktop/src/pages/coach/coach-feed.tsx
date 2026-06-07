@@ -1,9 +1,12 @@
 import { memo, useEffect, useRef } from "react";
-import { ChevronRight } from "@untitledui/icons";
+import { ChevronRight, Play } from "@untitledui/icons";
 import { Badge } from "@/components/base/badges/badges";
-import { useEngineSelector } from "@/lib/engine";
+import { Button } from "@/components/base/buttons/button";
+import { useAuthSelector } from "@/lib/auth";
+import { useEngineActions, useEngineSelector } from "@/lib/engine";
 import type { FeedItem } from "@/lib/engine-types";
-import { ACTIVITY } from "@/pages/coach/shared";
+import { useCoachNav } from "@/pages/coach/coach-nav";
+import { ACTIVITY, configEqual, isCoachReady, usageFromMe } from "@/pages/coach/shared";
 
 const FeedBubble = memo(function FeedBubble({ item }: { item: FeedItem }) {
     if (item.kind === "user") {
@@ -73,6 +76,60 @@ const FeedMessages = memo(function FeedMessages() {
     );
 });
 
+const FeedActionBar = memo(function FeedActionBar() {
+    const actions = useEngineActions();
+    const { goToCoach } = useCoachNav();
+    const gameId = useEngineSelector((s) => s.gameId);
+    const config = useEngineSelector((s) => s.config, configEqual);
+    const running = useEngineSelector((s) => s.running);
+    const me = useAuthSelector((s) => s.me);
+    const { overQuota } = usageFromMe(me);
+    const voiceId = config?.tts_voice_id ?? null;
+    const ready = isCoachReady(gameId, voiceId);
+
+    if (!ready) {
+        return (
+            <div className="shrink-0 border-t border-secondary p-4">
+                <Button color="primary" size="md" className="w-full" onClick={goToCoach}>
+                    Complete setup
+                </Button>
+                <p className="mt-2 text-center text-xs text-tertiary">
+                    {!gameId && !voiceId
+                        ? "Select a game and voice on the Coach tab"
+                        : !gameId
+                          ? "Select a game on the Coach tab"
+                          : "Select a voice on the Coach tab"}
+                </p>
+            </div>
+        );
+    }
+
+    if (running) {
+        return (
+            <div className="shrink-0 border-t border-secondary p-4">
+                <Button color="primary-destructive" size="md" className="w-full" onClick={() => actions.stop()}>
+                    Stop coaching
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="shrink-0 border-t border-secondary p-4">
+            <Button
+                color="primary"
+                size="md"
+                className="w-full"
+                iconLeading={Play}
+                isDisabled={overQuota}
+                onClick={() => actions.start()}
+            >
+                Start coaching
+            </Button>
+        </div>
+    );
+});
+
 export const CoachFeed = memo(function CoachFeed({ onMinimize }: { onMinimize?: () => void }) {
     const shellClass =
         "flex min-h-0 flex-1 flex-col rounded-l-xl rounded-r-none border border-r-0 border-secondary bg-secondary";
@@ -96,6 +153,7 @@ export const CoachFeed = memo(function CoachFeed({ onMinimize }: { onMinimize?: 
                 </div>
             </div>
             <FeedMessages />
+            <FeedActionBar />
         </aside>
     );
 });
