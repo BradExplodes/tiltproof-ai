@@ -35,6 +35,7 @@ type Listener = () => void;
 export class EngineStore {
     private _state: EngineSnapshot = INITIAL_ENGINE_SNAPSHOT;
     private _listeners = new Set<Listener>();
+    private _flushScheduled = false;
 
     readonly subscribe = (listener: Listener): (() => void) => {
         this._listeners.add(listener);
@@ -43,8 +44,22 @@ export class EngineStore {
 
     getState = (): EngineSnapshot => this._state;
 
+    // State is updated synchronously, but listener notifications are coalesced to
+    // one flush per animation frame. A coaching cycle emits status/perf/advice/cost
+    // events in quick bursts; without batching each one drives a separate React
+    // commit + repaint, multiplying the DWM compositor work that stutters the game.
     private emit(): void {
-        for (const listener of this._listeners) listener();
+        if (this._flushScheduled) return;
+        this._flushScheduled = true;
+        const flush = () => {
+            this._flushScheduled = false;
+            for (const listener of this._listeners) listener();
+        };
+        if (typeof requestAnimationFrame === "function") {
+            requestAnimationFrame(flush);
+        } else {
+            setTimeout(flush, 16);
+        }
     }
 
     private replace(next: EngineSnapshot): void {

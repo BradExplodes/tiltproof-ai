@@ -9,6 +9,16 @@ const ENGINE_PORT = Number(process.env.AICOACH_PORT ?? 8765);
 const ENGINE_TOKEN = crypto.randomBytes(16).toString("hex");
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 
+// Disable the GPU compositor for this control-panel UI. With hardware
+// acceleration on, every Chromium repaint (coach feed, status badge, perf line)
+// presents a frame through the GPU and kicks Windows DWM out of the game's
+// fast independent-flip path, causing a visible in-game lag spike on each UI
+// change. Software compositing for a static panel is cheap and removes the
+// GPU/DWM contention entirely. Set TILTPROOF_ENABLE_GPU=1 to opt back in.
+if (process.env.TILTPROOF_ENABLE_GPU !== "1") {
+    app.disableHardwareAcceleration();
+}
+
 let engine: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 

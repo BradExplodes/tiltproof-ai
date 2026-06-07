@@ -132,6 +132,36 @@ def _estimate_mp3_duration_s(path: Path) -> float:
     return path.stat().st_size / 16_000 + 1.0
 
 
+# Windows MCI (winmm) decodes MP3 natively, so we avoid the `playsound` package
+# (which on Windows only handles WAV) and the frozen-exe footgun of spawning
+# `sys.executable -c "..."` (a PyInstaller build relaunches itself instead of
+# running inline Python). The script is run via a temp .ps1 with -File to avoid
+# command-line quoting issues with the embedded C# / quoted MCI path. PowerShell
+# ships on every supported Windows version. The audio path is passed via the
+# AICOACH_TTS_PATH env var, and a non-zero MCI "open" result exits non-zero so
+# the caller can detect playback failure.
+_WIN_MP3_PS_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+$p = $env:AICOACH_TTS_PATH
+Add-Type -Namespace TP -Name MCI -MemberDefinition '[DllImport("winmm.dll", CharSet=CharSet.Auto)] public static extern int mciSendString(string c, System.Text.StringBuilder b, int s, System.IntPtr h);'
+$buf = New-Object System.Text.StringBuilder 256
+if ([TP.MCI]::mciSendString('open "' + $p + '" type mpegvideo alias tpaudio', $buf, 256, [System.IntPtr]::Zero) -ne 0) { exit 1 }
+[void][TP.MCI]::mciSendString('play tpaudio wait', $buf, 256, [System.IntPtr]::Zero)
+[void][TP.MCI]::mciSendString('close tpaudio', $buf, 256, [System.IntPtr]::Zero)
+"""
+
+_win_mp3_script_path: Path | None = None
+
+
+def _win_mp3_script() -> Path:
+    global _win_mp3_script_path
+    if _win_mp3_script_path is None or not _win_mp3_script_path.exists():
+        path = Path(tempfile.gettempdir()) / "tiltproof_play_mp3.ps1"
+        path.write_text(_WIN_MP3_PS_SCRIPT, encoding="utf-8")
+        _win_mp3_script_path = path
+    return _win_mp3_script_path
+
+
 def play_mp3_file(
     path: Path,
     *,
@@ -139,6 +169,7 @@ def play_mp3_file(
     poll_interval_s: float = 0.03,
 ) -> bool:
     """Play MP3 in a child process so playback can be killed without touching the mic stream."""
+    import shutil
     import subprocess
     import sys
 
@@ -147,9 +178,31 @@ def play_mp3_file(
 
     duration_s = _estimate_mp3_duration_s(path)
     env = {**os.environ, "AICOACH_TTS_PATH": str(path)}
+
+    if sys.platform == "win32":
+        proc = subprocess.Popen(
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(_win_mp3_script()),
+            ],
+            env=env,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return _poll_playback(proc, duration_s=duration_s, stop_check=stop_check, poll_interval_s=poll_interval_s, on_interrupt=lambda: None)
+
+    # Other platforms: use playsound via a real interpreter. In a frozen build
+    # `sys.executable` is the bundled engine, so fall back to a system Python.
+    python = sys.executable
+    if getattr(sys, "frozen", False):
+        python = shutil.which("python3") or shutil.which("python") or python
     proc = subprocess.Popen(
         [
-            sys.executable,
+            python,
             "-c",
             "import os; from playsound import playsound; playsound(os.environ['AICOACH_TTS_PATH'], block=True)",
         ],
