@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { UpdateBanner } from "@/components/update-banner";
-import { useAuth } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { EngineProvider } from "@/lib/engine";
 import { useUpdater } from "@/lib/updater";
 import { CoachScreen } from "@/pages/coach-screen";
 import { LoginScreen } from "@/pages/login-screen";
 
-export const App = () => {
+const AppRoutes = () => {
     const auth = useAuth();
     const updater = useUpdater();
 
@@ -39,5 +40,15 @@ export const App = () => {
 
     if (!auth.session) return shell(<LoginScreen auth={auth} />);
 
-    return shell(<CoachScreen auth={auth} />);
+    return shell(
+        <EngineProvider>
+            <CoachScreen />
+        </EngineProvider>,
+    );
 };
+
+export const App = () => (
+    <AuthProvider>
+        <AppRoutes />
+    </AuthProvider>
+);
