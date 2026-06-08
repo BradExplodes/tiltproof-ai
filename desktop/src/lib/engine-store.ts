@@ -124,7 +124,9 @@ export class EngineStore {
                         prev.config.tts_voice_id === config.tts_voice_id &&
                         prev.config.voice_input_enabled === config.voice_input_enabled &&
                         prev.config.ocr_enabled === config.ocr_enabled &&
-                        prev.config.web_search_enabled === config.web_search_enabled;
+                        prev.config.web_search_enabled === config.web_search_enabled &&
+                        prev.config.player_name === config.player_name &&
+                        prev.config.interval_seconds === config.interval_seconds;
                     if (sameConfig && prev.gameId === gameId) return null;
                     return { ...prev, config, gameId };
                 });

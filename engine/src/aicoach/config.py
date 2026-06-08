@@ -25,6 +25,7 @@ class Settings:
     openai_api_key: str
     openai_model: str
     openai_describe_model: str
+    player_name: str
     capture_interval_seconds: float
     save_screenshots: bool
     image_detail: str
@@ -82,6 +83,8 @@ class Settings:
                 raise ValueError(
                     "OPENAI_API_KEY is not set. Copy .env.example to .env and add your key."
                 )
+
+        player_name = os.getenv("PLAYER_NAME", "").strip()[:60]
 
         interval = float(os.getenv("CAPTURE_INTERVAL_SECONDS", "20"))
         if interval < 1:
@@ -188,6 +191,7 @@ class Settings:
             openai_api_key=api_key,
             openai_model=response_model,
             openai_describe_model=describe_model,
+            player_name=player_name,
             capture_interval_seconds=interval,
             save_screenshots=_env_bool("SAVE_SCREENSHOTS", False),
             image_detail=image_detail,

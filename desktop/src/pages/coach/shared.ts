@@ -34,7 +34,8 @@ export const configEqual = (a: RuntimeConfig | null, b: RuntimeConfig | null): b
         a.tts_voice_id === b.tts_voice_id &&
         a.voice_input_enabled === b.voice_input_enabled &&
         a.ocr_enabled === b.ocr_enabled &&
-        a.web_search_enabled === b.web_search_enabled
+        a.web_search_enabled === b.web_search_enabled &&
+        a.player_name === b.player_name
     );
 };
 

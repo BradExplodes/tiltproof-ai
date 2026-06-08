@@ -11,6 +11,7 @@ from aicoach.openai_client import build_openai_client
 
 from aicoach.capture import Screenshot
 from aicoach.cycle_timings import CycleTimings
+from aicoach.memory import LongTermMemory
 from aicoach.pricing import UsageCost, estimate_cost_usd
 from aicoach.prompts import load_coach_prompt
 from aicoach.map_intel import (
@@ -123,8 +124,10 @@ class AICoach:
         web_search_scenes: frozenset[str] = frozenset(
             {"map_select", "menu", "results"}
         ),
+        memory: LongTermMemory | None = None,
     ) -> None:
         self._client = build_openai_client(api_key)
+        self._memory = memory
         self._response_model = model
         self._describe_model = describe_model or model
         self._max_history_messages = max_history_messages
@@ -258,15 +261,30 @@ class AICoach:
 
     def _coach_system_prompt(self, coach_prompt: str) -> str:
         """Prior spoken lines only — never replay old observations (avoids 'nothing new' diffing)."""
+        prompt = coach_prompt
+        if self._memory is not None:
+            mem_block = self._memory.format_for_prompt()
+            if mem_block:
+                prompt = f"{prompt}\n\n{mem_block}"
         if not self._spoken_lines:
-            return coach_prompt
+            return prompt
         recap = "\n".join(f"- {line}" for line in self._spoken_lines)
         return (
-            f"{coach_prompt}\n\n"
+            f"{prompt}\n\n"
             "YOUR RECENT SPOKEN LINES (wording reference only — you MUST still speak this turn; "
             "do NOT treat these as proof nothing new happened):\n"
             f"{recap}"
         )
+
+    def _store_memory(self, parsed: ParsedCoachResponse, game_id: str) -> None:
+        """Persist an optional MEMORY note the model emitted this turn."""
+        if self._memory is None or not parsed.memory:
+            return
+        try:
+            if self._memory.add(parsed.memory, game_id=game_id):
+                logger.info("Stored long-term memory: %s", parsed.memory[:80])
+        except Exception:
+            logger.exception("Failed to store long-term memory")
 
     def _scene_from_observation(self, obs: ScreenObservation) -> str:
         return obs.screen_type or "unknown"
@@ -810,6 +828,7 @@ class AICoach:
         )
         timings.coach_api_calls = 1 + retry_calls
         timings.coach_s = time.monotonic() - coach_started
+        self._store_memory(parsed, game_id)
 
         spoken = clean_spoken_output(parsed.spoken)
         usage = _merge_usage(describe_usage, response_usage)
@@ -898,6 +917,7 @@ class AICoach:
         )
         timings.coach_api_calls = 1 + retry_calls
         timings.coach_s = time.monotonic() - coach_started
+        self._store_memory(parsed, game_id)
         scene = parsed.scene if parsed.scene != "unknown" else scene
         spoken = parsed.spoken
         requires_speech = scene_requires_speech(scene, observation.screen_type)

@@ -61,6 +61,13 @@ export interface RuntimeConfig {
     voice_input_enabled: boolean | null;
     ocr_enabled: boolean | null;
     web_search_enabled: boolean | null;
+    player_name: string | null;
+}
+
+export interface MemoryEntry {
+    text: string;
+    ts: string;
+    game_id: string | null;
 }
 
 export interface ElevenLabsVoice {

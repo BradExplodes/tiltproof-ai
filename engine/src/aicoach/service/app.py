@@ -25,6 +25,7 @@ from aicoach.capture import list_monitors
 from aicoach.config import Settings
 from aicoach.elevenlabs_client import ElevenLabsError
 from aicoach.elevenlabs_client import list_voices as fetch_elevenlabs_voices
+from aicoach.memory import default_memory
 from aicoach.prompts import list_games
 from aicoach.tts import PREVIEW_SAMPLE_TEXT, synthesize_preview_audio
 from aicoach.service.bus import EventBus
@@ -66,6 +67,15 @@ def create_app(token: str | None = None) -> FastAPI:
     @app.get("/state")
     async def state() -> dict[str, Any]:
         return app.state.session.state()
+
+    @app.get("/memory")
+    async def get_memory() -> dict[str, Any]:
+        return {"entries": default_memory().entries()}
+
+    @app.delete("/memory")
+    async def clear_memory() -> dict[str, Any]:
+        default_memory().clear()
+        return {"ok": True, "entries": []}
 
     @app.get("/voices")
     async def voices() -> dict[str, Any]:

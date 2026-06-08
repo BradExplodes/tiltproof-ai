@@ -12,6 +12,7 @@ from aicoach.capture import ScreenCapturer, Screenshot
 from aicoach.coach import AICoach, CoachAdvice
 from aicoach.config import Settings
 from aicoach.cycle_timings import CycleTimings
+from aicoach.memory import default_memory
 from aicoach.pricing import estimate_stt_cost_usd
 from aicoach.prompts import load_prompt
 from aicoach.tts import SpeechSynthesizer, build_tts
@@ -31,6 +32,19 @@ logger = logging.getLogger(__name__)
 _POLL_S = 0.2
 
 
+def _with_player_name(prompt: str, player_name: str) -> str:
+    """Tell the coach who they're talking to so it addresses the player by name."""
+    name = (player_name or "").strip()
+    if not name:
+        return prompt
+    return (
+        f"{prompt}\n\n"
+        f"PLAYER NAME: The person you are coaching is called \"{name}\". "
+        f"Refer to them as {name} naturally when it fits — like a mate would. "
+        "Do not overuse it or force it into every line."
+    )
+
+
 class CoachRunner:
     """
     Main loop: periodic screen coaching when idle, voice-triggered replies when
@@ -48,7 +62,7 @@ class CoachRunner:
         self._settings = settings
         self._game_id = game_id
         self._on_event = on_event
-        self._system_prompt = load_prompt(game_id)
+        self._system_prompt = _with_player_name(load_prompt(game_id), settings.player_name)
         self._capturer = ScreenCapturer(
             monitor_index=monitor_index,
             max_width=settings.capture_max_width,
@@ -82,6 +96,7 @@ class CoachRunner:
             web_search_model=settings.web_search_model,
             web_search_context_size=settings.web_search_context_size,
             web_search_scenes=settings.web_search_scenes,
+            memory=default_memory(),
         )
         self._tts: SpeechSynthesizer | None = build_tts(settings)
         self._voice: VoiceListener | None = None

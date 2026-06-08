@@ -1,4 +1,4 @@
-import type { ElevenLabsVoice } from "@/lib/engine-types";
+import type { ElevenLabsVoice, MemoryEntry } from "@/lib/engine-types";
 
 let httpUrlCache: string | null = null;
 
@@ -47,6 +47,24 @@ export async function fetchVoices(): Promise<ElevenLabsVoice[]> {
     }
     const data = (await res.json()) as { voices: ElevenLabsVoice[] };
     return data.voices ?? [];
+}
+
+export async function fetchMemory(): Promise<MemoryEntry[]> {
+    const res = await fetch(`${await baseUrl()}/memory`);
+    if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(formatApiError(res.status, detail));
+    }
+    const data = (await res.json()) as { entries: MemoryEntry[] };
+    return data.entries ?? [];
+}
+
+export async function clearMemory(): Promise<void> {
+    const res = await fetch(`${await baseUrl()}/memory`, { method: "DELETE" });
+    if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(formatApiError(res.status, detail));
+    }
 }
 
 export async function fetchVoicePreview(voiceId: string, text?: string): Promise<Blob> {

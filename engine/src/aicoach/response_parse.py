@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_STRUCTURAL_TAGS = ("SCENE", "SAY", "MAP_INTEL", "SEARCH_QUERY")
+_STRUCTURAL_TAGS = ("SCENE", "SAY", "MAP_INTEL", "SEARCH_QUERY", "MEMORY")
 
 _SILENT_SAY = frozenset(
     {
@@ -31,6 +31,7 @@ class ParsedCoachResponse:
     search_query: str | None = None
     skip: bool = False
     map_intel: str | None = None
+    memory: str | None = None
 
 
 def is_silent_reply(spoken: str) -> bool:
@@ -67,13 +68,13 @@ def normalize_response_text(text: str) -> str:
 def extract_map_intel(text: str) -> str | None:
     normalized = normalize_response_text(text)
     match = re.search(
-        r"(?:^|\n)MAP_INTEL:\s*(.+?)(?=\n(?:SCENE|SAY|SEARCH_QUERY):|$)",
+        r"(?:^|\n)MAP_INTEL:\s*(.+?)(?=\n(?:SCENE|SAY|SEARCH_QUERY|MEMORY):|$)",
         normalized,
         flags=re.IGNORECASE | re.DOTALL,
     )
     if not match:
         match = re.search(
-            r"MAP_INTEL:\s*(.+?)(?=(?:SCENE|SAY|SEARCH_QUERY):|$)",
+            r"MAP_INTEL:\s*(.+?)(?=(?:SCENE|SAY|SEARCH_QUERY|MEMORY):|$)",
             normalized,
             flags=re.IGNORECASE | re.DOTALL,
         )
@@ -85,16 +86,32 @@ def extract_map_intel(text: str) -> str | None:
     return intel
 
 
+def extract_memory(text: str) -> str | None:
+    """Optional MEMORY line — a durable note the coach wants to remember."""
+    normalized = normalize_response_text(text)
+    match = re.search(
+        r"(?:^|\n)MEMORY:\s*(.+?)(?=\n(?:SCENE|SAY|SEARCH_QUERY|MAP_INTEL):|$)",
+        normalized,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+    note = match.group(1).strip().strip('"').strip("'")
+    if note.upper() in ("NONE", "N/A", "NA", "-", ""):
+        return None
+    return note
+
+
 def extract_scene(text: str) -> str:
     normalized = normalize_response_text(text)
     match = re.search(
-        r"(?:^|\n)SCENE:\s*(.+?)(?=\n(?:SAY|MAP_INTEL|SEARCH_QUERY):|$)",
+        r"(?:^|\n)SCENE:\s*(.+?)(?=\n(?:SAY|MAP_INTEL|SEARCH_QUERY|MEMORY):|$)",
         normalized,
         flags=re.IGNORECASE | re.DOTALL,
     )
     if not match:
         match = re.search(
-            r"SCENE:\s*(.+?)(?=(?:SAY|MAP_INTEL|SEARCH_QUERY):|$)",
+            r"SCENE:\s*(.+?)(?=(?:SAY|MAP_INTEL|SEARCH_QUERY|MEMORY):|$)",
             normalized,
             flags=re.IGNORECASE | re.DOTALL,
         )
@@ -106,7 +123,7 @@ def extract_scene(text: str) -> str:
 def extract_search_query(text: str) -> str | None:
     normalized = normalize_response_text(text)
     match = re.search(
-        r"(?:^|\n)SEARCH_QUERY:\s*(.+?)(?=\n(?:SCENE|SAY|MAP_INTEL):|$)",
+        r"(?:^|\n)SEARCH_QUERY:\s*(.+?)(?=\n(?:SCENE|SAY|MAP_INTEL|MEMORY):|$)",
         normalized,
         flags=re.IGNORECASE | re.DOTALL,
     )
@@ -141,7 +158,7 @@ def extract_say_only(text: str) -> str:
         return ""
 
     say = match.group(1).strip()
-    say = re.split(r"\n(?:MAP_INTEL|SCENE|SEARCH_QUERY):", say, flags=re.IGNORECASE)[0]
+    say = re.split(r"\n(?:MAP_INTEL|SCENE|SEARCH_QUERY|MEMORY):", say, flags=re.IGNORECASE)[0]
     say = re.sub(r"\(https?://[^)]+\)", "", say)
     say = re.sub(r"https?://\S+", "", say)
     say = re.sub(r"\*\*", "", say)
@@ -176,6 +193,7 @@ def parse_coach_response(raw: str) -> ParsedCoachResponse:
     scene = extract_scene(text)
     search_query = extract_search_query(text)
     map_intel = extract_map_intel(text)
+    memory = extract_memory(text)
     spoken = extract_say_only(text)
 
     if _looks_like_unparsed_blob(spoken, text):
@@ -193,4 +211,5 @@ def parse_coach_response(raw: str) -> ParsedCoachResponse:
         search_query=search_query,
         skip=skip,
         map_intel=map_intel,
+        memory=memory,
     )
