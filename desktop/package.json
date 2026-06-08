@@ -1,6 +1,6 @@
 {
     "name": "aicoach-desktop",
-    "version": "0.3.2",
+    "version": "0.3.3",
     "type": "module",
     "private": true,
     "description": "Tiltproof AI desktop app",
@@ -19,7 +19,7 @@
     "build": {
         "appId": "net.tiltproof.app",
         "productName": "Tiltproof AI",
-        "icon": "build-resources/icon.png",
+        "icon": "build-resources/icon.ico",
         "toolsets": {
             "winCodeSign": "1.1.0"
         },
@@ -45,7 +45,7 @@
             "target": [
                 "nsis"
             ],
-            "icon": "build-resources/icon.png",
+            "icon": "build-resources/icon.ico",
             "artifactName": "Tiltproof-AI-Setup-${version}.${ext}"
         },
         "nsis": {
@@ -53,8 +53,8 @@
             "perMachine": true,
             "allowToChangeInstallationDirectory": false,
             "deleteAppDataOnUninstall": false,
-            "installerIcon": "build-resources/icon.png",
-            "uninstallerIcon": "build-resources/icon.png"
+            "installerIcon": "build-resources/icon.ico",
+            "uninstallerIcon": "build-resources/icon.ico"
         },
         "publish": [
             {
